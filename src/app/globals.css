@@ -19,8 +19,8 @@ body {
 
 /* Subtle clean scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: #f1f5f9;
@@ -29,17 +29,20 @@ body {
   background: #cbd5e1;
   border-radius: 9999px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+
+/* Fixed Invoice Bill Sheet Style (800px on web, 100% on print) */
+.invoice-bill-sheet {
+  width: 800px;
+  max-width: 800px;
+  box-sizing: border-box;
 }
 
 /* ─────────────────────────────────────────────────────────
-   PRINT STYLES — EXACT SAME AS WEB WITH ZERO BROWSER HEADERS
+   PRINT STYLES — FULL A4 FIT WITHOUT CROPPING
    ───────────────────────────────────────────────────────── */
 @page {
-  /* margin: 0 removes browser default header (date/title) and footer (URL/page) */
-  margin: 0;
   size: A4 portrait;
+  margin: 6mm 8mm; /* Standard clean A4 margins */
 }
 
 @media print {
@@ -56,13 +59,22 @@ body {
     display: none !important;
   }
 
+  .invoice-bill-sheet,
   #invoice-print-area {
-    margin: 0 auto !important;
-    padding: 10mm 10mm !important;
-    box-shadow: none !important;
-    border: none !important;
     width: 100% !important;
     max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+    box-sizing: border-box !important;
+  }
+
+  #invoice-print-area img {
+    max-width: 100% !important;
+    height: auto !important;
   }
 }
 

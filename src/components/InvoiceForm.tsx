@@ -72,6 +72,8 @@ interface InvoiceFormProps {
 export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
   const router = useRouter();
   const [step, setStep] = useState<Step>(1);
+  const [invoiceId] = useState<string>(() => initialData?.id || uuidv4());
+  const [isSaving, setIsSaving] = useState(false);
   const [data, setData] = useState<Omit<Invoice, "id" | "createdAt" | "updatedAt">>(
     initialData
       ? {
@@ -130,14 +132,21 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
   );
 
   async function handleSave() {
-    const invoice: Invoice = {
-      id: initialData?.id || uuidv4(),
-      createdAt: initialData?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      ...data,
-    };
-    await saveInvoice(invoice);
-    router.push(`/invoice/${invoice.id}`);
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      const invoice: Invoice = {
+        id: invoiceId,
+        createdAt: initialData?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        ...data,
+      };
+      await saveInvoice(invoice);
+      router.replace(`/invoice/${invoice.id}`);
+    } catch (err) {
+      console.error(err);
+      setIsSaving(false);
+    }
   }
 
   const stepLabels = [
@@ -229,6 +238,7 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
               data={data}
               onSave={handleSave}
               mode={mode}
+              isSaving={isSaving}
             />
           )}
 

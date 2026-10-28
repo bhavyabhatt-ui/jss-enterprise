@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { getInvoiceById, fetchInvoiceById } from "@/lib/storage";
 import { exportToPDF, exportToImage, exportToWord, shareInvoiceToWhatsApp } from "@/lib/export";
 import { Invoice } from "@/types/invoice";
-import InvoicePreview from "@/components/InvoicePreview";
+import ResponsiveInvoiceViewer from "@/components/ResponsiveInvoiceViewer";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -205,13 +205,9 @@ export default function InvoiceViewPage() {
         )}
       </header>
 
-      {/* ── BILL PREVIEW CONTAINER (FIXED 800PX BILL WITH HORIZONTAL SCROLL ON MOBILE) ── */}
+      {/* ── BILL PREVIEW CONTAINER (RESPONSIVE FIT-TO-SCREEN ON MOBILE, FIXED 800PX IN PRINT/PDF) ── */}
       <main className="max-w-6xl mx-auto px-2 sm:px-4 py-6">
-        <div className="w-full overflow-x-auto pb-6 flex justify-start lg:justify-center">
-          <div className="min-w-[800px] shrink-0">
-            <InvoicePreview invoice={invoice} />
-          </div>
-        </div>
+        <ResponsiveInvoiceViewer invoice={invoice} />
       </main>
     </div>
   );

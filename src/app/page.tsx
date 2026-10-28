@@ -167,7 +167,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Table / Empty State */}
+          {/* Table (Desktop) & Cards (Mobile) */}
           {filtered.length === 0 ? (
             <div className="py-16 text-center px-4">
               <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
@@ -185,95 +185,167 @@ export default function DashboardPage() {
               </Link>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/60 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
-                    <th className="px-4 sm:px-6 py-3">Invoice No</th>
-                    <th className="px-4 py-3">Customer / Buyer</th>
-                    <th className="px-4 py-3 hidden md:table-cell">Date</th>
-                    <th className="px-4 py-3 text-right">Grand Total</th>
-                    <th className="px-4 sm:px-6 py-3 text-center w-36">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filtered.map((inv) => (
-                    <tr
-                      key={inv.id}
-                      className={`hover:bg-slate-50/80 transition-all ${
-                        deletingId === inv.id ? "opacity-30 scale-98" : ""
-                      }`}
-                    >
-                      {/* Invoice No */}
-                      <td className="px-4 sm:px-6 py-3.5">
+            <div>
+              {/* ── MOBILE CARDS VIEW (NO HORIZONTAL SCROLL) ── */}
+              <div className="block md:hidden divide-y divide-slate-100">
+                {filtered.map((inv) => (
+                  <div
+                    key={inv.id}
+                    className={`p-4 hover:bg-slate-50/80 transition-all ${
+                      deletingId === inv.id ? "opacity-30 scale-98" : ""
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <Link
+                        href={`/invoice/${inv.id}`}
+                        className="font-bold text-amber-600 hover:text-amber-700 text-sm hover:underline"
+                      >
+                        {inv.invoiceInfo.invoiceNo || "INV-DRAFT"}
+                      </Link>
+                      <span className="text-[11px] text-slate-500 font-medium">{inv.invoiceInfo.invoiceDate}</span>
+                    </div>
+
+                    <div className="mb-2.5">
+                      <p className="font-semibold text-slate-900 text-xs">{inv.buyerDetails.customerName || "Customer"}</p>
+                      <p className="text-slate-400 text-[11px] truncate">{inv.buyerDetails.cityState || inv.buyerDetails.address}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Total Amount</span>
+                        <span className="font-bold text-slate-900 text-sm">
+                          ₹ {inv.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-1.5">
                         <Link
                           href={`/invoice/${inv.id}`}
-                          className="font-bold text-amber-600 hover:text-amber-700 hover:underline inline-flex items-center gap-1.5"
+                          className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
                         >
-                          <span>{inv.invoiceInfo.invoiceNo || "INV-DRAFT"}</span>
+                          View
                         </Link>
-                      </td>
+                        <button
+                          type="button"
+                          onClick={() => shareInvoiceToWhatsApp(inv)}
+                          className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors"
+                          title="Share on WhatsApp"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
+                        <Link
+                          href={`/invoice/${inv.id}/edit`}
+                          className="p-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-md transition-colors"
+                          title="Edit Bill"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(inv.id, inv.invoiceInfo.invoiceNo)}
+                          className="p-1.5 text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-md transition-colors"
+                          title="Delete Bill"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-                      {/* Customer */}
-                      <td className="px-4 py-3.5">
-                        <p className="font-semibold text-slate-900">{inv.buyerDetails.customerName || "Customer"}</p>
-                        <p className="text-slate-400 text-[11px] truncate max-w-xs">{inv.buyerDetails.cityState || inv.buyerDetails.address}</p>
-                      </td>
-
-                      {/* Date */}
-                      <td className="px-4 py-3.5 hidden md:table-cell text-slate-600 font-medium">
-                        {inv.invoiceInfo.invoiceDate}
-                      </td>
-
-                      {/* Amount */}
-                      <td className="px-4 py-3.5 text-right font-bold text-slate-900">
-                        ₹ {inv.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-4 sm:px-6 py-3.5">
-                        <div className="flex items-center justify-center gap-1">
-                          {/* View */}
+              {/* ── DESKTOP TABLE VIEW ── */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50/60 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+                      <th className="px-4 sm:px-6 py-3">Invoice No</th>
+                      <th className="px-4 py-3">Customer / Buyer</th>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3 text-right">Grand Total</th>
+                      <th className="px-4 sm:px-6 py-3 text-center w-36">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filtered.map((inv) => (
+                      <tr
+                        key={inv.id}
+                        className={`hover:bg-slate-50/80 transition-all ${
+                          deletingId === inv.id ? "opacity-30 scale-98" : ""
+                        }`}
+                      >
+                        {/* Invoice No */}
+                        <td className="px-4 sm:px-6 py-3.5">
                           <Link
                             href={`/invoice/${inv.id}`}
-                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                            title="View & Export Bill"
+                            className="font-bold text-amber-600 hover:text-amber-700 hover:underline inline-flex items-center gap-1.5"
                           >
-                            <Eye className="w-4 h-4" />
+                            <span>{inv.invoiceInfo.invoiceNo || "INV-DRAFT"}</span>
                           </Link>
+                        </td>
 
-                          {/* WhatsApp */}
-                          <button
-                            onClick={() => shareInvoiceToWhatsApp(inv)}
-                            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
-                            title="Share on WhatsApp"
-                          >
-                            <Share2 className="w-4 h-4" />
-                          </button>
+                        {/* Customer */}
+                        <td className="px-4 py-3.5">
+                          <p className="font-semibold text-slate-900">{inv.buyerDetails.customerName || "Customer"}</p>
+                          <p className="text-slate-400 text-[11px] truncate max-w-xs">{inv.buyerDetails.cityState || inv.buyerDetails.address}</p>
+                        </td>
 
-                          {/* Edit */}
-                          <Link
-                            href={`/invoice/${inv.id}/edit`}
-                            className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
-                            title="Edit Bill"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Link>
+                        {/* Date */}
+                        <td className="px-4 py-3.5 text-slate-600 font-medium">
+                          {inv.invoiceInfo.invoiceDate}
+                        </td>
 
-                          {/* Delete */}
-                          <button
-                            onClick={() => handleDelete(inv.id, inv.invoiceInfo.invoiceNo)}
-                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                            title="Delete Bill"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        {/* Amount */}
+                        <td className="px-4 py-3.5 text-right font-bold text-slate-900">
+                          ₹ {inv.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-4 sm:px-6 py-3.5">
+                          <div className="flex items-center justify-center gap-1">
+                            {/* View */}
+                            <Link
+                              href={`/invoice/${inv.id}`}
+                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              title="View & Export Bill"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Link>
+
+                            {/* WhatsApp */}
+                            <button
+                              onClick={() => shareInvoiceToWhatsApp(inv)}
+                              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                              title="Share on WhatsApp"
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </button>
+
+                            {/* Edit */}
+                            <Link
+                              href={`/invoice/${inv.id}/edit`}
+                              className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
+                              title="Edit Bill"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Link>
+
+                            {/* Delete */}
+                            <button
+                              onClick={() => handleDelete(inv.id, inv.invoiceInfo.invoiceNo)}
+                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                              title="Delete Bill"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

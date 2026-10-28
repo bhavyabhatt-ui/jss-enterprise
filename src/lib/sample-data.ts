@@ -101,3 +101,4 @@ export const SAMPLE_INITIAL_INVOICE: Invoice = {
   grandTotal: 492060,
   amountInWords: "Four Lakh Ninety Two Thousand Sixty Rupees Only",
 };
+

@@ -1,16 +1,17 @@
 "use client";
 
 import { Invoice } from "@/types/invoice";
-import InvoicePreview from "@/components/InvoicePreview";
-import { Check, Save } from "lucide-react";
+import ResponsiveInvoiceViewer from "@/components/ResponsiveInvoiceViewer";
+import { Check, Save, Loader2 } from "lucide-react";
 
 interface Props {
   data: Omit<Invoice, "id" | "createdAt" | "updatedAt">;
   onSave: () => void;
   mode: "new" | "edit";
+  isSaving?: boolean;
 }
 
-export default function Step5Summary({ data, onSave, mode }: Props) {
+export default function Step5Summary({ data, onSave, mode, isSaving }: Props) {
   const previewInvoice: Invoice = {
     id: "preview-id",
     createdAt: new Date().toISOString(),
@@ -19,41 +20,49 @@ export default function Step5Summary({ data, onSave, mode }: Props) {
   };
 
   return (
-    <div className="p-4 sm:p-6">
+    <div className="p-3 sm:p-6">
       {/* Title & Save Bar */}
-      <div className="mb-6 pb-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/50 p-4 rounded-xl border">
+      <div className="mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/70 p-3 sm:p-4 rounded-xl border">
         <div>
-          <h3 className="text-base font-bold text-slate-900">Step 5: Live Invoice Preview</h3>
+          <h3 className="text-sm sm:text-base font-bold text-slate-900">Step 5: Live Invoice Preview</h3>
           <p className="text-slate-500 text-xs mt-0.5">
-            Review the complete invoice. Click &quot;Save Invoice&quot; to register and unlock PDF, Image, Word &amp; WhatsApp exports.
+            Review the complete bill. Click below to save and unlock exports.
           </p>
         </div>
         <button
           type="button"
           onClick={onSave}
-          className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2.5 rounded-lg text-xs transition-all shadow-sm active:scale-98 whitespace-nowrap"
+          disabled={isSaving}
+          className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold px-5 py-2.5 rounded-lg text-xs transition-all shadow-sm active:scale-98 whitespace-nowrap"
         >
-          <Save className="w-4 h-4" />
-          <span>{mode === "new" ? "Save & Register Bill" : "Update & Save Bill"}</span>
+          {isSaving ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
+          <span>{isSaving ? "Saving Bill..." : mode === "new" ? "Save & Register Bill" : "Update & Save Bill"}</span>
         </button>
       </div>
 
-      {/* Bill Preview */}
-      <div className="bg-slate-100/60 p-2 sm:p-4 rounded-xl border border-slate-200 shadow-2xs overflow-x-auto">
-        <div className="min-w-[800px] flex justify-start sm:justify-center">
-          <InvoicePreview invoice={previewInvoice} />
-        </div>
+      {/* Responsive Bill Preview (Fit to Screen on Phone, Full on Desktop) */}
+      <div className="bg-slate-100/70 p-2 sm:p-4 rounded-xl border border-slate-200 shadow-2xs mb-6">
+        <ResponsiveInvoiceViewer invoice={previewInvoice} />
       </div>
 
       {/* Bottom Save Bar */}
-      <div className="mt-6 flex justify-end">
+      <div className="flex justify-end">
         <button
           type="button"
           onClick={onSave}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-2.5 rounded-lg text-xs transition-all shadow-sm active:scale-98"
+          disabled={isSaving}
+          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-lg text-xs transition-all shadow-sm active:scale-98"
         >
-          <Check className="w-4 h-4" />
-          <span>{mode === "new" ? "Confirm & Save Invoice" : "Confirm & Update Invoice"}</span>
+          {isSaving ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Check className="w-4 h-4" />
+          )}
+          <span>{isSaving ? "Saving Bill..." : mode === "new" ? "Confirm & Save Invoice" : "Confirm & Update Invoice"}</span>
         </button>
       </div>
     </div>

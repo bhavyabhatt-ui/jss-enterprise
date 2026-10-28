@@ -29,11 +29,8 @@ export default function InvoicePreview({ invoice }: Props) {
   return (
     <div
       id="invoice-print-area"
-      className="bg-white text-slate-900 mx-auto p-6 shadow-md rounded-xl border border-slate-200"
+      className="invoice-bill-sheet bg-white text-slate-900 mx-auto p-5 sm:p-6 shadow-md rounded-xl border border-slate-200"
       style={{
-        width: "800px",
-        minWidth: "800px",
-        maxWidth: "800px",
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         fontSize: "12px",
         lineHeight: 1.4,

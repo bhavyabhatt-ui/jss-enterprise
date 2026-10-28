@@ -5,6 +5,26 @@ const STORAGE_KEY = "jss_enterprise_invoices";
 
 export { SAMPLE_INITIAL_INVOICE };
 
+function deduplicateInvoices(invoices: Invoice[]): Invoice[] {
+  const seenIds = new Set<string>();
+  const seenNos = new Set<string>();
+  const result: Invoice[] = [];
+
+  for (const inv of invoices) {
+    if (!inv || !inv.id) continue;
+    const invNo = inv.invoiceInfo?.invoiceNo?.trim().toLowerCase();
+
+    if (seenIds.has(inv.id)) continue;
+    if (invNo && seenNos.has(invNo)) continue;
+
+    seenIds.add(inv.id);
+    if (invNo) seenNos.add(invNo);
+    result.push(inv);
+  }
+
+  return result;
+}
+
 /**
  * Fetch all invoices from Server API, fallback to localStorage
  */
@@ -14,10 +34,11 @@ export async function fetchInvoices(): Promise<Invoice[]> {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
+        const deduped = deduplicateInvoices(data);
         if (typeof window !== "undefined") {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped));
         }
-        return data;
+        return deduped;
       }
     }
   } catch (err) {
@@ -36,7 +57,6 @@ export async function fetchInvoiceById(id: string): Promise<Invoice | null> {
     if (res.ok) {
       const data = await res.json();
       if (data && data.id) {
-        // Also update local cache
         const local = getAllInvoices();
         const idx = local.findIndex((inv) => inv.id === id);
         if (idx >= 0) {
@@ -44,8 +64,9 @@ export async function fetchInvoiceById(id: string): Promise<Invoice | null> {
         } else {
           local.unshift(data);
         }
+        const deduped = deduplicateInvoices(local);
         if (typeof window !== "undefined") {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(local));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped));
         }
         return data;
       }
@@ -58,19 +79,32 @@ export async function fetchInvoiceById(id: string): Promise<Invoice | null> {
 }
 
 /**
- * Save invoice to both Server API and localStorage
+ * Save invoice to both Server API and localStorage with deduplication
  */
 export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
-  // 1. Immediately update localStorage for instant optimistic UI
+  const invNo = invoice.invoiceInfo?.invoiceNo?.trim().toLowerCase();
+
+  // 1. Immediately update localStorage
   if (typeof window !== "undefined") {
     const invoices = getAllInvoices();
-    const existingIndex = invoices.findIndex((inv) => inv.id === invoice.id);
+    const existingIndex = invoices.findIndex(
+      (inv) =>
+        inv.id === invoice.id ||
+        (invNo && inv.invoiceInfo?.invoiceNo?.trim().toLowerCase() === invNo)
+    );
+
     if (existingIndex >= 0) {
-      invoices[existingIndex] = { ...invoice, updatedAt: new Date().toISOString() };
+      invoices[existingIndex] = {
+        ...invoice,
+        id: invoices[existingIndex].id,
+        updatedAt: new Date().toISOString(),
+      };
     } else {
-      invoices.unshift(invoice);
+      invoices.unshift({ ...invoice, updatedAt: new Date().toISOString() });
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
+
+    const deduped = deduplicateInvoices(invoices);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped));
   }
 
   // 2. Persist to Server Database / API
@@ -95,13 +129,11 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
  * Delete invoice from both Server API and localStorage
  */
 export async function deleteInvoice(id: string): Promise<void> {
-  // 1. Immediately update localStorage
   if (typeof window !== "undefined") {
     const invoices = getAllInvoices().filter((inv) => inv.id !== id);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
   }
 
-  // 2. Delete on Server API
   try {
     await fetch(`/api/invoices/${id}`, { method: "DELETE" });
   } catch (err) {
@@ -110,7 +142,7 @@ export async function deleteInvoice(id: string): Promise<void> {
 }
 
 /**
- * Local cache read
+ * Local cache read with deduplication
  */
 export function getAllInvoices(): Invoice[] {
   if (typeof window === "undefined") return [SAMPLE_INITIAL_INVOICE];
@@ -122,7 +154,11 @@ export function getAllInvoices(): Invoice[] {
       return initial;
     }
     const parsed = JSON.parse(data);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [SAMPLE_INITIAL_INVOICE];
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      const deduped = deduplicateInvoices(parsed);
+      return deduped;
+    }
+    return [SAMPLE_INITIAL_INVOICE];
   } catch {
     return [SAMPLE_INITIAL_INVOICE];
   }
