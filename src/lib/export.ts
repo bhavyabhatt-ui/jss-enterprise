@@ -13,16 +13,20 @@ async function captureElementToPng(elementId: string): Promise<string> {
     throw new Error("Invoice preview element not found");
   }
 
-  // Generate high-resolution image (pixelRatio: 2 gives 300 DPI sharpness)
+  // Generate high-resolution image at fixed 800px width (pixelRatio: 2 gives 300 DPI sharpness)
   const dataUrl = await toPng(element, {
     quality: 1,
     pixelRatio: 2,
     backgroundColor: "#ffffff",
     cacheBust: true,
+    width: 800,
     style: {
       transform: "none",
       boxShadow: "none",
       margin: "0",
+      width: "800px",
+      minWidth: "800px",
+      maxWidth: "800px",
     },
   });
 

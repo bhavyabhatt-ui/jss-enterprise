@@ -129,14 +129,14 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
     [data.items, recalculate]
   );
 
-  function handleSave() {
+  async function handleSave() {
     const invoice: Invoice = {
       id: initialData?.id || uuidv4(),
       createdAt: initialData?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ...data,
     };
-    saveInvoice(invoice);
+    await saveInvoice(invoice);
     router.push(`/invoice/${invoice.id}`);
   }
 

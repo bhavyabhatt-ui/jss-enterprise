@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getInvoiceById } from "@/lib/storage";
+import { getInvoiceById, fetchInvoiceById } from "@/lib/storage";
 import { Invoice } from "@/types/invoice";
 import InvoiceForm from "@/components/InvoiceForm";
 import { Loader2 } from "lucide-react";
@@ -16,19 +16,27 @@ export default function EditInvoicePage() {
 
   useEffect(() => {
     if (id) {
-      const inv = getInvoiceById(id);
-      if (!inv) router.push("/");
-      else {
-        setInvoice(inv);
+      const local = getInvoiceById(id);
+      if (local) {
+        setInvoice(local);
         setLoading(false);
       }
+
+      fetchInvoiceById(id).then((serverInv) => {
+        if (serverInv) {
+          setInvoice(serverInv);
+        } else if (!local) {
+          router.push("/");
+        }
+        setLoading(false);
+      });
     }
   }, [id, router]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-yellow-400 animate-spin" />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
       </div>
     );
   }
@@ -37,4 +45,3 @@ export default function EditInvoicePage() {
 
   return <InvoiceForm mode="edit" initialData={invoice} />;
 }
-

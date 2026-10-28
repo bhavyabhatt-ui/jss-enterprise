@@ -39,8 +39,10 @@ export default function Step5Summary({ data, onSave, mode }: Props) {
       </div>
 
       {/* Bill Preview */}
-      <div className="bg-slate-100/60 p-2 sm:p-4 rounded-xl border border-slate-200 shadow-2xs">
-        <InvoicePreview invoice={previewInvoice} />
+      <div className="bg-slate-100/60 p-2 sm:p-4 rounded-xl border border-slate-200 shadow-2xs overflow-x-auto">
+        <div className="min-w-[800px] flex justify-start sm:justify-center">
+          <InvoicePreview invoice={previewInvoice} />
+        </div>
       </div>
 
       {/* Bottom Save Bar */}

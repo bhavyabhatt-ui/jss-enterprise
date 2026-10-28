@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getInvoiceById } from "@/lib/storage";
+import { getInvoiceById, fetchInvoiceById } from "@/lib/storage";
 import { exportToPDF, exportToImage, exportToWord, shareInvoiceToWhatsApp } from "@/lib/export";
 import { Invoice } from "@/types/invoice";
 import InvoicePreview from "@/components/InvoicePreview";
@@ -31,9 +31,18 @@ export default function InvoiceViewPage() {
 
   useEffect(() => {
     if (id) {
-      const inv = getInvoiceById(id);
-      if (!inv) router.push("/");
-      else setInvoice(inv);
+      // 1. Instant optimistic load from local storage
+      const local = getInvoiceById(id);
+      if (local) setInvoice(local);
+
+      // 2. Cross-device server fetch
+      fetchInvoiceById(id).then((serverInv) => {
+        if (serverInv) {
+          setInvoice(serverInv);
+        } else if (!local) {
+          router.push("/");
+        }
+      });
     }
   }, [id, router]);
 
@@ -196,9 +205,13 @@ export default function InvoiceViewPage() {
         )}
       </header>
 
-      {/* ── BILL PREVIEW CONTAINER ── */}
-      <main className="max-w-5xl mx-auto px-2 sm:px-4 py-6">
-        <InvoicePreview invoice={invoice} />
+      {/* ── BILL PREVIEW CONTAINER (FIXED 800PX BILL WITH HORIZONTAL SCROLL ON MOBILE) ── */}
+      <main className="max-w-6xl mx-auto px-2 sm:px-4 py-6">
+        <div className="w-full overflow-x-auto pb-6 flex justify-start lg:justify-center">
+          <div className="min-w-[800px] shrink-0">
+            <InvoicePreview invoice={invoice} />
+          </div>
+        </div>
       </main>
     </div>
   );

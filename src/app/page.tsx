@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { getAllInvoices, deleteInvoice } from "@/lib/storage";
+import { getAllInvoices, fetchInvoices, deleteInvoice } from "@/lib/storage";
 import { Invoice } from "@/types/invoice";
 import { shareInvoiceToWhatsApp } from "@/lib/export";
 import {
@@ -25,7 +25,14 @@ export default function DashboardPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
+    // 1. Initial fast render from local cache
     setInvoices(getAllInvoices());
+    // 2. Cross-device sync with Server API
+    fetchInvoices().then((serverData) => {
+      if (serverData && serverData.length > 0) {
+        setInvoices(serverData);
+      }
+    });
   }, []);
 
   const filtered = invoices.filter(
@@ -42,14 +49,13 @@ export default function DashboardPage() {
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
 
-  function handleDelete(id: string, invoiceNo: string) {
+  async function handleDelete(id: string, invoiceNo: string) {
     if (confirm(`Are you sure you want to delete invoice ${invoiceNo || id}?`)) {
       setDeletingId(id);
-      setTimeout(() => {
-        deleteInvoice(id);
-        setInvoices(getAllInvoices());
-        setDeletingId(null);
-      }, 250);
+      await deleteInvoice(id);
+      const updated = await fetchInvoices();
+      setInvoices(updated);
+      setDeletingId(null);
     }
   }
 

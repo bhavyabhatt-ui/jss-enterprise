@@ -1,124 +1,122 @@
 import { Invoice } from "@/types/invoice";
+import { SAMPLE_INITIAL_INVOICE } from "@/lib/sample-data";
 
 const STORAGE_KEY = "jss_enterprise_invoices";
-const LEGACY_STORAGE_KEY = "invoiceiq_invoices";
 
-export const SAMPLE_INITIAL_INVOICE: Invoice = {
-  id: "jss-sample-0142",
-  createdAt: "2026-10-17T10:30:00.000Z",
-  updatedAt: "2026-10-17T10:30:00.000Z",
-  invoiceInfo: {
-    invoiceNo: "JSS/24-25/0142",
-    invoiceDate: "17/10/2026",
-    challanNo: "CH-2026-089",
-    poDateNo: "PO/99821",
-    placeOfSupply: "Gujarat (24)",
-  },
-  buyerDetails: {
-    customerName: "M/s. Precision Tools Ltd.",
-    address: "Plot No. 45, GIDC Industrial Estate",
-    cityState: "Odhav, Ahmedabad - 382415",
-    gstinPan: "24AAACP1234F1Z2",
-    contactNo: "+91 98765 43210",
-  },
-  items: [
-    {
-      id: "item-1",
-      description: "Heavy Duty CNC Router Machine (1325 Model)",
-      specifications: "3.5kW Air Cooled Spindle with Vacuum Bed Setup",
-      hsnSac: "84581100",
-      qty: 1,
-      unit: "Set",
-      rate: 350000,
-      amount: 350000,
-    },
-    {
-      id: "item-2",
-      description: "Weihong NK105 DSP CNC Controller Remote",
-      specifications: "Handheld Pendant Controller with Cable Set",
-      hsnSac: "85371000",
-      qty: 1,
-      unit: "Nos",
-      rate: 22500,
-      amount: 22500,
-    },
-    {
-      id: "item-3",
-      description: "High Precision Spindle Motor 4.5kW",
-      specifications: "",
-      hsnSac: "85015210",
-      qty: 1,
-      unit: "Nos",
-      rate: 18000,
-      amount: 18000,
-    },
-    {
-      id: "item-4",
-      description: "Industrial VFD Frequency Inverter Drive",
-      specifications: "",
-      hsnSac: "85044090",
-      qty: 1,
-      unit: "Nos",
-      rate: 12500,
-      amount: 12500,
-    },
-    {
-      id: "item-5",
-      description: "CNC Carbide Tooling Bits & Collet Set (ER20)",
-      specifications: "",
-      hsnSac: "82077090",
-      qty: 2,
-      unit: "Set",
-      rate: 4500,
-      amount: 9000,
-    },
-    {
-      id: "item-6",
-      description: "Machine On-site Installation & Technical Servicing",
-      specifications: "",
-      hsnSac: "998719",
-      qty: 1,
-      unit: "Serv",
-      rate: 5000,
-      amount: 5000,
-    },
-  ],
-  bankDetails: {
-    bankName: "UNION BANK OF INDIA",
-    accountHolder: "JSS ENTERPRISE",
-    accountNo: "50360 20100 10504",
-    ifscCode: "UBIN0550361",
-    branch: "ODHAV RING ROAD / Ahmedabad",
-  },
-  taxDetails: {
-    cgst: 9,
-    sgst: 9,
-    igst: 0,
-  },
-  termsAndConditions:
-    "1. Goods once sold will not be taken back or exchanged.\n2. Interest @ 18% p.a. will be charged if bill is not settled on due date.\n3. Warranty covers manufacturing defects as per OEM policy.\n4. Subject to Ahmedabad Jurisdiction only.",
-  subTotal: 417000,
-  cgstAmount: 37530,
-  sgstAmount: 37530,
-  igstAmount: 0,
-  grandTotal: 492060,
-  amountInWords: "Four Lakh Ninety Two Thousand Sixty Rupees Only",
-};
+export { SAMPLE_INITIAL_INVOICE };
 
-export function getAllInvoices(): Invoice[] {
-  if (typeof window === "undefined") return [];
+/**
+ * Fetch all invoices from Server API, fallback to localStorage
+ */
+export async function fetchInvoices(): Promise<Invoice[]> {
   try {
-    let data = localStorage.getItem(STORAGE_KEY);
-    if (!data) {
-      // Check legacy key
-      const legacyData = localStorage.getItem(LEGACY_STORAGE_KEY);
-      if (legacyData) {
-        data = legacyData;
-        localStorage.setItem(STORAGE_KEY, legacyData);
+    const res = await fetch("/api/invoices", { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+        return data;
       }
     }
+  } catch (err) {
+    console.warn("Server API fetch failed, using local cache:", err);
+  }
+
+  return getAllInvoices();
+}
+
+/**
+ * Fetch a specific invoice from Server API, fallback to localStorage
+ */
+export async function fetchInvoiceById(id: string): Promise<Invoice | null> {
+  try {
+    const res = await fetch(`/api/invoices/${id}`, { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.id) {
+        // Also update local cache
+        const local = getAllInvoices();
+        const idx = local.findIndex((inv) => inv.id === id);
+        if (idx >= 0) {
+          local[idx] = data;
+        } else {
+          local.unshift(data);
+        }
+        if (typeof window !== "undefined") {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(local));
+        }
+        return data;
+      }
+    }
+  } catch (err) {
+    console.warn(`Server API fetch for invoice ${id} failed, using local cache:`, err);
+  }
+
+  return getInvoiceById(id);
+}
+
+/**
+ * Save invoice to both Server API and localStorage
+ */
+export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
+  // 1. Immediately update localStorage for instant optimistic UI
+  if (typeof window !== "undefined") {
+    const invoices = getAllInvoices();
+    const existingIndex = invoices.findIndex((inv) => inv.id === invoice.id);
+    if (existingIndex >= 0) {
+      invoices[existingIndex] = { ...invoice, updatedAt: new Date().toISOString() };
+    } else {
+      invoices.unshift(invoice);
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
+  }
+
+  // 2. Persist to Server Database / API
+  try {
+    const res = await fetch("/api/invoices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(invoice),
+    });
+    if (res.ok) {
+      const saved = await res.json();
+      return saved;
+    }
+  } catch (err) {
+    console.error("Failed to save invoice to server:", err);
+  }
+
+  return invoice;
+}
+
+/**
+ * Delete invoice from both Server API and localStorage
+ */
+export async function deleteInvoice(id: string): Promise<void> {
+  // 1. Immediately update localStorage
+  if (typeof window !== "undefined") {
+    const invoices = getAllInvoices().filter((inv) => inv.id !== id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
+  }
+
+  // 2. Delete on Server API
+  try {
+    await fetch(`/api/invoices/${id}`, { method: "DELETE" });
+  } catch (err) {
+    console.error(`Failed to delete invoice ${id} on server:`, err);
+  }
+}
+
+/**
+ * Local cache read
+ */
+export function getAllInvoices(): Invoice[] {
+  if (typeof window === "undefined") return [SAMPLE_INITIAL_INVOICE];
+  try {
+    const data = localStorage.getItem(STORAGE_KEY);
     if (!data) {
-      // Initialize with sample invoice matching user's exact bill!
       const initial = [SAMPLE_INITIAL_INVOICE];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
       return initial;
@@ -133,22 +131,6 @@ export function getAllInvoices(): Invoice[] {
 export function getInvoiceById(id: string): Invoice | null {
   const invoices = getAllInvoices();
   return invoices.find((inv) => inv.id === id) || null;
-}
-
-export function saveInvoice(invoice: Invoice): void {
-  const invoices = getAllInvoices();
-  const existingIndex = invoices.findIndex((inv) => inv.id === invoice.id);
-  if (existingIndex >= 0) {
-    invoices[existingIndex] = { ...invoice, updatedAt: new Date().toISOString() };
-  } else {
-    invoices.unshift(invoice);
-  }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
-}
-
-export function deleteInvoice(id: string): void {
-  const invoices = getAllInvoices().filter((inv) => inv.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
 }
 
 export function numberToWords(amount: number): string {

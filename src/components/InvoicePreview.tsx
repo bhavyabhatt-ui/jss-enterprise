@@ -29,8 +29,11 @@ export default function InvoicePreview({ invoice }: Props) {
   return (
     <div
       id="invoice-print-area"
-      className="bg-white text-slate-900 mx-auto w-full max-w-[850px] p-4 sm:p-7 shadow-lg rounded-xl border border-slate-200"
+      className="bg-white text-slate-900 mx-auto p-6 shadow-md rounded-xl border border-slate-200"
       style={{
+        width: "800px",
+        minWidth: "800px",
+        maxWidth: "800px",
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         fontSize: "12px",
         lineHeight: 1.4,
@@ -39,20 +42,20 @@ export default function InvoicePreview({ invoice }: Props) {
       }}
     >
       {/* ── TOP HEADER BANNER ── */}
-      <div className="rounded-xl overflow-hidden mb-4 shadow-sm border border-slate-800 bg-[#1e2329]">
+      <div className="rounded-xl overflow-hidden mb-3.5 shadow-xs border border-slate-800 bg-[#1e2329]">
         <img
           src={HEADER_IMAGE_BASE64}
           alt="JSS Enterprise Tax Invoice"
           className="w-full h-auto block object-contain"
-          style={{ width: "100%", maxHeight: "170px" }}
+          style={{ width: "800px", maxHeight: "165px" }}
         />
       </div>
 
-      {/* ── INVOICE INFO & BUYER DETAILS (2 COLUMNS) ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-3.5">
+      {/* ── INVOICE INFO & BUYER DETAILS (STRICT 2 COLUMNS ON ALL DEVICES) ── */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
         {/* Left: Invoice Information */}
-        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-xs">
-          <div className="bg-[#243342] text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center justify-between">
+        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-2xs">
+          <div className="bg-[#243342] text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider">
             <span>INVOICE INFORMATION</span>
           </div>
           <div className="p-2.5 text-xs divide-y divide-slate-100">
@@ -80,8 +83,8 @@ export default function InvoicePreview({ invoice }: Props) {
         </div>
 
         {/* Right: Billed To / Buyer Details */}
-        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-xs">
-          <div className="bg-[#243342] text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center justify-between">
+        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-2xs">
+          <div className="bg-[#243342] text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider">
             <span>BILLED TO / BUYER DETAILS</span>
           </div>
           <div className="p-2.5 text-xs divide-y divide-slate-100">
@@ -109,16 +112,16 @@ export default function InvoicePreview({ invoice }: Props) {
         </div>
       </div>
 
-      {/* ── ITEMS TABLE ── */}
-      <div className="border border-slate-300 rounded-lg overflow-hidden mb-3.5 shadow-xs">
+      {/* ── ITEMS TABLE (FULL WIDTH TABLE) ── */}
+      <div className="border border-slate-300 rounded-lg overflow-hidden mb-3 shadow-2xs">
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr className="bg-[#243342] text-white text-[11px]">
-              <th className="py-2 px-2 text-center font-bold w-7">#</th>
+              <th className="py-2 px-2 text-center font-bold w-8">#</th>
               <th className="py-2 px-3 text-left font-bold">Item Description &amp; Specifications</th>
-              <th className="py-2 px-2 text-center font-bold w-20">HSN/SAC</th>
-              <th className="py-2 px-2 text-center font-bold w-12">Qty</th>
-              <th className="py-2 px-2 text-center font-bold w-14">Unit</th>
+              <th className="py-2 px-2 text-center font-bold w-24">HSN/SAC</th>
+              <th className="py-2 px-2 text-center font-bold w-14">Qty</th>
+              <th className="py-2 px-2 text-center font-bold w-16">Unit</th>
               <th className="py-2 px-3 text-right font-bold w-28">Rate (₹)</th>
               <th className="py-2 px-3 text-right font-bold w-28">Amount (₹)</th>
             </tr>
@@ -147,10 +150,10 @@ export default function InvoicePreview({ invoice }: Props) {
         </table>
       </div>
 
-      {/* ── BANK DETAILS & TOTALS (2 COLUMNS) ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-3.5">
+      {/* ── BANK DETAILS & TOTALS (STRICT 2 COLUMNS ON ALL DEVICES) ── */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
         {/* Left: Bank Payment Details */}
-        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-xs">
+        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-2xs">
           <div className="bg-[#243342] text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider">
             <span>BANK PAYMENT DETAILS</span>
           </div>
@@ -179,7 +182,7 @@ export default function InvoicePreview({ invoice }: Props) {
         </div>
 
         {/* Right: Totals Box */}
-        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-xs flex flex-col justify-between">
+        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-2xs flex flex-col justify-between">
           <div className="p-2.5 text-xs divide-y divide-slate-100 flex-1">
             <div className="flex justify-between items-center py-1">
               <span className="text-slate-600 font-medium">Sub-Total (Excl. Tax)</span>
@@ -210,13 +213,13 @@ export default function InvoicePreview({ invoice }: Props) {
       </div>
 
       {/* ── AMOUNT IN WORDS ── */}
-      <div className="border border-slate-300 rounded-lg px-3.5 py-2 mb-3.5 bg-slate-50/70 text-xs flex items-center flex-wrap gap-1">
+      <div className="border border-slate-300 rounded-lg px-3.5 py-2 mb-3 bg-slate-50/70 text-xs flex items-center flex-wrap gap-1">
         <span className="font-bold text-slate-800">Amount in Words:</span>
         <span className="text-slate-900 font-medium italic">{amountInWords}</span>
       </div>
 
-      {/* ── TERMS & CONDITIONS + SIGNATORY ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+      {/* ── TERMS & CONDITIONS + SIGNATORY (STRICT 2 COLUMNS ON ALL DEVICES) ── */}
+      <div className="grid grid-cols-2 gap-3 pt-1">
         {/* Terms */}
         <div className="border border-slate-200 rounded-lg p-3 bg-white text-[10px] text-slate-600">
           <div className="font-bold text-slate-800 text-[11px] uppercase tracking-wider mb-1.5 pb-1 border-b border-slate-100">
