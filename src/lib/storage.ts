@@ -1,14 +1,132 @@
 import { Invoice } from "@/types/invoice";
 
-const STORAGE_KEY = "invoiceiq_invoices";
+const STORAGE_KEY = "jss_enterprise_invoices";
+const LEGACY_STORAGE_KEY = "invoiceiq_invoices";
+
+export const SAMPLE_INITIAL_INVOICE: Invoice = {
+  id: "jss-sample-0142",
+  createdAt: "2026-10-17T10:30:00.000Z",
+  updatedAt: "2026-10-17T10:30:00.000Z",
+  invoiceInfo: {
+    invoiceNo: "JSS/24-25/0142",
+    invoiceDate: "17/10/2026",
+    challanNo: "CH-2026-089",
+    poDateNo: "PO/99821",
+    placeOfSupply: "Gujarat (24)",
+  },
+  buyerDetails: {
+    customerName: "M/s. Precision Tools Ltd.",
+    address: "Plot No. 45, GIDC Industrial Estate",
+    cityState: "Odhav, Ahmedabad - 382415",
+    gstinPan: "24AAACP1234F1Z2",
+    contactNo: "+91 98765 43210",
+  },
+  items: [
+    {
+      id: "item-1",
+      description: "Heavy Duty CNC Router Machine (1325 Model)",
+      specifications: "3.5kW Air Cooled Spindle with Vacuum Bed Setup",
+      hsnSac: "84581100",
+      qty: 1,
+      unit: "Set",
+      rate: 350000,
+      amount: 350000,
+    },
+    {
+      id: "item-2",
+      description: "Weihong NK105 DSP CNC Controller Remote",
+      specifications: "Handheld Pendant Controller with Cable Set",
+      hsnSac: "85371000",
+      qty: 1,
+      unit: "Nos",
+      rate: 22500,
+      amount: 22500,
+    },
+    {
+      id: "item-3",
+      description: "High Precision Spindle Motor 4.5kW",
+      specifications: "",
+      hsnSac: "85015210",
+      qty: 1,
+      unit: "Nos",
+      rate: 18000,
+      amount: 18000,
+    },
+    {
+      id: "item-4",
+      description: "Industrial VFD Frequency Inverter Drive",
+      specifications: "",
+      hsnSac: "85044090",
+      qty: 1,
+      unit: "Nos",
+      rate: 12500,
+      amount: 12500,
+    },
+    {
+      id: "item-5",
+      description: "CNC Carbide Tooling Bits & Collet Set (ER20)",
+      specifications: "",
+      hsnSac: "82077090",
+      qty: 2,
+      unit: "Set",
+      rate: 4500,
+      amount: 9000,
+    },
+    {
+      id: "item-6",
+      description: "Machine On-site Installation & Technical Servicing",
+      specifications: "",
+      hsnSac: "998719",
+      qty: 1,
+      unit: "Serv",
+      rate: 5000,
+      amount: 5000,
+    },
+  ],
+  bankDetails: {
+    bankName: "UNION BANK OF INDIA",
+    accountHolder: "JSS ENTERPRISE",
+    accountNo: "50360 20100 10504",
+    ifscCode: "UBIN0550361",
+    branch: "ODHAV RING ROAD / Ahmedabad",
+  },
+  taxDetails: {
+    cgst: 9,
+    sgst: 9,
+    igst: 0,
+  },
+  termsAndConditions:
+    "1. Goods once sold will not be taken back or exchanged.\n2. Interest @ 18% p.a. will be charged if bill is not settled on due date.\n3. Warranty covers manufacturing defects as per OEM policy.\n4. Subject to Ahmedabad Jurisdiction only.",
+  subTotal: 417000,
+  cgstAmount: 37530,
+  sgstAmount: 37530,
+  igstAmount: 0,
+  grandTotal: 492060,
+  amountInWords: "Four Lakh Ninety Two Thousand Sixty Rupees Only",
+};
 
 export function getAllInvoices(): Invoice[] {
   if (typeof window === "undefined") return [];
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    let data = localStorage.getItem(STORAGE_KEY);
+    if (!data) {
+      // Check legacy key
+      const legacyData = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacyData) {
+        data = legacyData;
+        localStorage.setItem(STORAGE_KEY, legacyData);
+      }
+    }
+    if (!data) {
+      // Initialize with sample invoice matching user's exact bill!
+      const initial = [SAMPLE_INITIAL_INVOICE];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+      return initial;
+    }
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [SAMPLE_INITIAL_INVOICE];
   } catch {
-    return [];
+    return [SAMPLE_INITIAL_INVOICE];
   }
 }
 
@@ -23,7 +141,7 @@ export function saveInvoice(invoice: Invoice): void {
   if (existingIndex >= 0) {
     invoices[existingIndex] = { ...invoice, updatedAt: new Date().toISOString() };
   } else {
-    invoices.push(invoice);
+    invoices.unshift(invoice);
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
 }

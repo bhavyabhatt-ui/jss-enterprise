@@ -37,3 +37,4 @@ export default function EditInvoicePage() {
 
   return <InvoiceForm mode="edit" initialData={invoice} />;
 }
+

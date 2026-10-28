@@ -150,18 +150,33 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header */}
-      <div className="bg-slate-900/80 backdrop-blur border-b border-slate-700/50 sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
-          <button
-            onClick={() => router.push("/")}
-            className="text-slate-400 hover:text-white text-sm flex items-center gap-1 transition-colors"
-          >
-            ← Dashboard
-          </button>
-          <h1 className="text-yellow-400 font-bold text-lg">
-            {mode === "new" ? "Create New Invoice" : "Edit Invoice"}
+      <div className="bg-slate-900/90 backdrop-blur border-b border-slate-700/60 sticky top-0 z-40">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push("/")}
+              className="text-slate-400 hover:text-yellow-400 text-sm flex items-center gap-1.5 transition-colors font-medium bg-slate-800/80 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700/50"
+            >
+              ← Dashboard
+            </button>
+            <div className="hidden sm:flex items-center gap-2.5 pl-2 border-l border-slate-700">
+              <div className="w-8 h-8 rounded-lg overflow-hidden border border-yellow-500/40 bg-slate-950 p-0.5 shadow">
+                <img
+                  src="/logo.png"
+                  alt="JSS Enterprise"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div>
+                <p className="font-extrabold text-yellow-400 text-xs tracking-wider leading-none">JSS ENTERPRISE</p>
+                <p className="text-slate-400 text-[9px] tracking-wider uppercase font-semibold">Billing System</p>
+              </div>
+            </div>
+          </div>
+          <h1 className="text-yellow-400 font-bold text-base sm:text-lg">
+            {mode === "new" ? "Create Tax Invoice" : "Edit Tax Invoice"}
           </h1>
-          <div className="text-slate-400 text-sm">
+          <div className="text-slate-300 text-xs sm:text-sm font-semibold bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
             Step {step} of 5
           </div>
         </div>
@@ -239,3 +254,4 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
     </div>
   );
 }
+

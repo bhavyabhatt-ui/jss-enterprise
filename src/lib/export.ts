@@ -208,3 +208,4 @@ export async function exportToWord(invoice: Invoice) {
   const blob = await Packer.toBlob(doc);
   saveAs(blob, `Invoice-${invoice.invoiceInfo.invoiceNo || invoice.id}.docx`);
 }
+

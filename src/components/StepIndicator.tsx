@@ -64,3 +64,4 @@ export default function StepIndicator({ currentStep, steps }: Props) {
     </div>
   );
 }
+

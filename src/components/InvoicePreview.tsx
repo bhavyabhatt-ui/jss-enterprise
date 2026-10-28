@@ -221,3 +221,4 @@ export default function InvoicePreview({ invoice }: Props) {
     </div>
   );
 }
+

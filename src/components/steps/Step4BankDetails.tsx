@@ -98,3 +98,4 @@ export default function Step4BankDetails({ bankDetails, termsAndConditions, onCh
     </div>
   );
 }
+

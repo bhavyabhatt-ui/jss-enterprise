@@ -5,8 +5,13 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "InvoiceIQ — JSS Enterprise",
-  description: "Professional Invoice Management System for JSS Enterprise",
+  title: "JSS ENTERPRISE — Invoice & Billing System",
+  description: "JSS ENTERPRISE — Precision | Power | Progress. Official Billing and Tax Invoice Dashboard.",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -16,6 +21,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" href="/logo.png" type="image/png" />
+      </head>
       <body className={inter.className}>{children}</body>
     </html>
   );

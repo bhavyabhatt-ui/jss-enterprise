@@ -98,3 +98,4 @@ export default function Step1InvoiceInfo({ data, onChange }: Props) {
     </div>
   );
 }
+

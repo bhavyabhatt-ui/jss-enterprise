@@ -105,3 +105,4 @@ export default function Step2BuyerDetails({ data, onChange }: Props) {
     </div>
   );
 }
+

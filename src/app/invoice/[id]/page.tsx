@@ -60,14 +60,26 @@ export default function InvoiceViewPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Top Bar */}
-      <div className="bg-slate-900/80 backdrop-blur border-b border-slate-700/50 sticky top-0 z-40 no-print">
+      <div className="bg-slate-900/90 backdrop-blur border-b border-slate-700/60 sticky top-0 z-40 no-print">
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
-          <button
-            onClick={() => router.push("/")}
-            className="flex items-center gap-1.5 text-slate-400 hover:text-white text-sm transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" /> Dashboard
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push("/")}
+              className="flex items-center gap-1.5 text-slate-400 hover:text-yellow-400 text-sm transition-colors font-medium bg-slate-800/80 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700/50"
+            >
+              <ArrowLeft className="w-4 h-4" /> Dashboard
+            </button>
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-700">
+              <div className="w-8 h-8 rounded-lg overflow-hidden border border-yellow-500/40 bg-slate-950 p-0.5 shadow">
+                <img
+                  src="/logo.png"
+                  alt="JSS Enterprise"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <span className="font-extrabold text-yellow-400 text-sm tracking-wider">JSS ENTERPRISE</span>
+            </div>
+          </div>
 
           <div className="flex items-center gap-2 flex-wrap">
             {exportButtons.map(({ type, icon: Icon, label, color }) => (
@@ -104,3 +116,4 @@ export default function InvoiceViewPage() {
     </div>
   );
 }
+
