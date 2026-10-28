@@ -364,3 +364,4 @@ export default function MobileInvoiceCardView({ invoice }: Props) {
     </div>
   );
 }
+

@@ -63,35 +63,35 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-slate-50 text-slate-800">
       {/* ── TOP NAVIGATION ── */}
       <header className="bg-white border-b border-slate-200/80 sticky top-0 z-50 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16 gap-2">
             {/* Brand Logo & Name */}
-            <Link href="/" className="flex items-center gap-3 group">
-              <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-white p-0.5 shadow-xs group-hover:border-amber-400 transition-colors">
+            <Link href="/" className="flex items-center gap-2.5 sm:gap-3 group shrink-0 min-w-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg overflow-hidden border border-slate-200 bg-white p-0.5 shadow-xs group-hover:border-amber-400 transition-colors shrink-0">
                 <img
                   src="/logo.png"
                   alt="JSS Enterprise Logo"
                   className="w-full h-full object-contain"
                 />
               </div>
-              <div>
-                <h1 className="font-extrabold text-slate-900 text-base tracking-wide leading-none group-hover:text-amber-600 transition-colors">
+              <div className="shrink-0">
+                <h1 className="font-extrabold text-slate-900 text-sm sm:text-base tracking-wide leading-none group-hover:text-amber-600 transition-colors whitespace-nowrap">
                   JSS ENTERPRISE
                 </h1>
-                <p className="text-slate-400 text-[10px] tracking-widest font-semibold mt-0.5 uppercase">
+                <p className="text-slate-400 text-[9px] sm:text-[10px] tracking-wider sm:tracking-widest font-semibold mt-0.5 uppercase whitespace-nowrap">
                   Precision | Power | Progress
                 </p>
               </div>
             </Link>
 
-            {/* Action */}
-            <div className="flex items-center gap-2">
+            {/* Action Button: Never wraps */}
+            <div className="flex items-center gap-2 shrink-0">
               <Link
                 href="/invoice/new"
-                className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-all shadow-sm shadow-amber-500/20 active:scale-98"
+                className="inline-flex items-center gap-1.5 sm:gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm transition-all shadow-sm shadow-amber-500/20 active:scale-98 whitespace-nowrap shrink-0"
               >
-                <Plus className="w-4 h-4" />
-                <span>Create Bill</span>
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <span className="whitespace-nowrap">Create Bill</span>
               </Link>
             </div>
           </div>

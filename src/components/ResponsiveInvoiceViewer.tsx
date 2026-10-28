@@ -60,11 +60,10 @@ export default function ResponsiveInvoiceViewer({ invoice }: Props) {
             <button
               type="button"
               onClick={() => setActiveTab("mobile")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
-                activeTab === "mobile"
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all ${activeTab === "mobile"
                   ? "bg-white text-slate-900 shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
-              }`}
+                }`}
             >
               <Smartphone className="w-4 h-4 text-amber-500" />
               <span>📱 Mobile Card View</span>
@@ -75,11 +74,10 @@ export default function ResponsiveInvoiceViewer({ invoice }: Props) {
                 setActiveTab("a4");
                 handleFitWidth();
               }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
-                activeTab === "a4"
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all ${activeTab === "a4"
                   ? "bg-white text-slate-900 shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
-              }`}
+                }`}
             >
               <FileText className="w-4 h-4 text-sky-600" />
               <span>📄 Official A4 Sheet</span>
