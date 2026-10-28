@@ -74,19 +74,19 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
   const [data, setData] = useState<Omit<Invoice, "id" | "createdAt" | "updatedAt">>(
     initialData
       ? {
-          invoiceInfo: initialData.invoiceInfo,
-          buyerDetails: initialData.buyerDetails,
-          items: initialData.items,
-          bankDetails: initialData.bankDetails,
-          taxDetails: initialData.taxDetails,
-          termsAndConditions: initialData.termsAndConditions,
-          subTotal: initialData.subTotal,
-          cgstAmount: initialData.cgstAmount,
-          sgstAmount: initialData.sgstAmount,
-          igstAmount: initialData.igstAmount,
-          grandTotal: initialData.grandTotal,
-          amountInWords: initialData.amountInWords,
-        }
+        invoiceInfo: initialData.invoiceInfo,
+        buyerDetails: initialData.buyerDetails,
+        items: initialData.items,
+        bankDetails: initialData.bankDetails,
+        taxDetails: initialData.taxDetails,
+        termsAndConditions: initialData.termsAndConditions,
+        subTotal: initialData.subTotal,
+        cgstAmount: initialData.cgstAmount,
+        sgstAmount: initialData.sgstAmount,
+        igstAmount: initialData.igstAmount,
+        grandTotal: initialData.grandTotal,
+        amountInWords: initialData.amountInWords,
+      }
       : defaultInvoice
   );
 
