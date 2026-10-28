@@ -3,7 +3,7 @@
 :root {
   --jss-gold: #f5a623;
   --jss-dark: #1e293b;
-  --jss-navy: #2b3a4a;
+  --jss-navy: #243342;
   --jss-accent: #d97706;
 }
 
@@ -15,7 +15,6 @@ body {
   background-color: #f8fafc;
   color: #0f172a;
   min-height: 100vh;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
 /* Subtle clean scrollbar */
@@ -34,20 +33,36 @@ body {
   background: #94a3b8;
 }
 
-/* Print styles for pixel-perfect printing */
+/* ─────────────────────────────────────────────────────────
+   PRINT STYLES — EXACT SAME AS WEB WITH ZERO BROWSER HEADERS
+   ───────────────────────────────────────────────────────── */
+@page {
+  /* margin: 0 removes browser default header (date/title) and footer (URL/page) */
+  margin: 0;
+  size: A4 portrait;
+}
+
 @media print {
-  body {
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
     background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
+
   .no-print {
     display: none !important;
   }
+
   #invoice-print-area {
+    margin: 0 auto !important;
+    padding: 10mm 10mm !important;
     box-shadow: none !important;
     border: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
     width: 100% !important;
+    max-width: 100% !important;
   }
 }
 

@@ -2,28 +2,49 @@ import { Invoice } from "@/types/invoice";
 import { HEADER_IMAGE_BASE64 } from "@/lib/assets";
 
 /**
- * Robust export to PDF using html2canvas & jsPDF
+ * Capture DOM element as PNG data URL using html-to-image
+ * (Natively supported by browser SVG foreignObject, avoiding all "lab" color parser errors)
  */
-export async function exportToPDF(elementId: string, filename: string): Promise<void> {
-  const { default: html2canvas } = await import("html2canvas");
-  const { default: jsPDF } = await import("jspdf");
+async function captureElementToPng(elementId: string): Promise<string> {
+  const { toPng } = await import("html-to-image");
 
   const element = document.getElementById(elementId);
   if (!element) {
     throw new Error("Invoice preview element not found");
   }
 
-  // Ensure element has white background and full width for capture
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: false,
+  // Generate high-resolution image (pixelRatio: 2 gives 300 DPI sharpness)
+  const dataUrl = await toPng(element, {
+    quality: 1,
+    pixelRatio: 2,
     backgroundColor: "#ffffff",
-    logging: false,
-    windowWidth: element.scrollWidth || 1024,
+    cacheBust: true,
+    style: {
+      transform: "none",
+      boxShadow: "none",
+      margin: "0",
+    },
   });
 
-  const imgData = canvas.toDataURL("image/png");
+  return dataUrl;
+}
+
+/**
+ * Robust export to PDF using html-to-image + jsPDF
+ */
+export async function exportToPDF(elementId: string, filename: string): Promise<void> {
+  const { default: jsPDF } = await import("jspdf");
+
+  const dataUrl = await captureElementToPng(elementId);
+
+  // Load image to determine exact aspect ratio
+  const img = new Image();
+  img.src = dataUrl;
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("Failed to load captured invoice image"));
+  });
+
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -33,21 +54,23 @@ export async function exportToPDF(elementId: string, filename: string): Promise<
   const pageWidth = 210;
   const pageHeight = 297;
   const imgWidth = pageWidth;
-  const imgHeight = (canvas.height * pageWidth) / canvas.width;
+  const imgHeight = (img.height * pageWidth) / img.width;
 
   if (imgHeight <= pageHeight) {
-    pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight, undefined, "FAST");
+    // Fits on a single A4 page
+    pdf.addImage(dataUrl, "PNG", 0, 0, imgWidth, imgHeight, undefined, "FAST");
   } else {
+    // Multi-page handling
     let heightLeft = imgHeight;
     let position = 0;
 
-    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight, undefined, "FAST");
+    pdf.addImage(dataUrl, "PNG", 0, position, imgWidth, imgHeight, undefined, "FAST");
     heightLeft -= pageHeight;
 
     while (heightLeft > 0) {
       position = heightLeft - imgHeight;
       pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight, undefined, "FAST");
+      pdf.addImage(dataUrl, "PNG", 0, position, imgWidth, imgHeight, undefined, "FAST");
       heightLeft -= pageHeight;
     }
   }
@@ -56,24 +79,20 @@ export async function exportToPDF(elementId: string, filename: string): Promise<
 }
 
 /**
- * Generate PDF as Blob for sharing
+ * Generate PDF as Blob for Web Share API
  */
 export async function generatePDFBlob(elementId: string): Promise<Blob> {
-  const { default: html2canvas } = await import("html2canvas");
   const { default: jsPDF } = await import("jspdf");
 
-  const element = document.getElementById(elementId);
-  if (!element) throw new Error("Invoice preview element not found");
+  const dataUrl = await captureElementToPng(elementId);
 
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: false,
-    backgroundColor: "#ffffff",
-    logging: false,
+  const img = new Image();
+  img.src = dataUrl;
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("Failed to load invoice image"));
   });
 
-  const imgData = canvas.toDataURL("image/png");
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -82,9 +101,9 @@ export async function generatePDFBlob(elementId: string): Promise<Blob> {
 
   const pageWidth = 210;
   const imgWidth = pageWidth;
-  const imgHeight = (canvas.height * pageWidth) / canvas.width;
+  const imgHeight = (img.height * pageWidth) / img.width;
 
-  pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight, undefined, "FAST");
+  pdf.addImage(dataUrl, "PNG", 0, 0, imgWidth, imgHeight, undefined, "FAST");
   return pdf.output("blob");
 }
 
@@ -92,34 +111,15 @@ export async function generatePDFBlob(elementId: string): Promise<Blob> {
  * Robust export to PNG image
  */
 export async function exportToImage(elementId: string, filename: string): Promise<void> {
-  const { default: html2canvas } = await import("html2canvas");
-  const { saveAs } = await import("file-saver");
+  const dataUrl = await captureElementToPng(elementId);
 
-  const element = document.getElementById(elementId);
-  if (!element) throw new Error("Invoice element not found");
-
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: false,
-    backgroundColor: "#ffffff",
-    logging: false,
-    windowWidth: element.scrollWidth || 1024,
-  });
-
-  canvas.toBlob((blob) => {
-    if (blob) {
-      saveAs(blob, `${filename}.png`);
-    } else {
-      const url = canvas.toDataURL("image/png");
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${filename}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
-  }, "image/png");
+  // Direct download
+  const link = document.createElement("a");
+  link.download = `${filename}.png`;
+  link.href = dataUrl;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 /**
@@ -187,8 +187,8 @@ export async function exportToWord(invoice: Invoice): Promise<void> {
 
   const headerShading = {
     type: ShadingType.SOLID,
-    color: "2B3A4A",
-    fill: "2B3A4A",
+    color: "243342",
+    fill: "243342",
   };
 
   const sectionHeader = (title: string) =>
@@ -232,7 +232,7 @@ export async function exportToWord(invoice: Invoice): Promise<void> {
   } else {
     children.push(
       new Paragraph({
-        children: [new TextRun({ text: "JSS ENTERPRISE — TAX INVOICE", bold: true, size: 28, color: "2B3A4A" })],
+        children: [new TextRun({ text: "JSS ENTERPRISE — TAX INVOICE", bold: true, size: 28, color: "243342" })],
         alignment: AlignmentType.CENTER,
       })
     );
@@ -560,7 +560,7 @@ export async function exportToWord(invoice: Invoice): Promise<void> {
         properties: {
           page: {
             margin: {
-              top: 720, // 0.5 inch
+              top: 720,
               bottom: 720,
               left: 720,
               right: 720,
@@ -662,7 +662,7 @@ export async function shareInvoiceToWhatsApp(
       if (err.name !== "AbortError") {
         console.warn("Native file share fallback to URL:", err);
       } else {
-        return; // User canceled the share sheet
+        return;
       }
     }
   }
@@ -670,7 +670,7 @@ export async function shareInvoiceToWhatsApp(
   // Direct WhatsApp Web / App link
   let phone = invoice.buyerDetails.contactNo.replace(/\D/g, "");
   if (phone.length === 10) {
-    phone = "91" + phone; // Default India prefix if 10 digits
+    phone = "91" + phone;
   }
 
   const encoded = encodeURIComponent(text);
