@@ -38,11 +38,11 @@ body {
 }
 
 /* ─────────────────────────────────────────────────────────
-   PRINT STYLES — FULL A4 FIT WITHOUT CROPPING
+   PRINT STYLES — FULL A4 FIT WITHOUT CROPPING OR MULTI-PAGE BLEED
    ───────────────────────────────────────────────────────── */
 @page {
   size: A4 portrait;
-  margin: 6mm 8mm; /* Standard clean A4 margins */
+  margin: 4mm 6mm;
 }
 
 @media print {
@@ -55,8 +55,20 @@ body {
     print-color-adjust: exact !important;
   }
 
-  .no-print {
+  .no-print,
+  header,
+  nav,
+  button,
+  .toast {
     display: none !important;
+  }
+
+  /* Reset main wrapper paddings during print */
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
   }
 
   .invoice-bill-sheet,
@@ -64,12 +76,14 @@ body {
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    margin: 0 auto !important;
+    padding: 2mm !important;
     border: none !important;
     box-shadow: none !important;
     transform: none !important;
     box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
   #invoice-print-area img {

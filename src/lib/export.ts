@@ -34,14 +34,12 @@ async function captureElementToPng(elementId: string): Promise<string> {
 }
 
 /**
- * Robust export to PDF using html-to-image + jsPDF
+ * Shared helper to create a calibrated, single-page A4 PDF from captured DOM element
  */
-export async function exportToPDF(elementId: string, filename: string): Promise<void> {
+async function createInvoicePDF(elementId: string) {
   const { default: jsPDF } = await import("jspdf");
-
   const dataUrl = await captureElementToPng(elementId);
 
-  // Load image to determine exact aspect ratio
   const img = new Image();
   img.src = dataUrl;
   await new Promise<void>((resolve, reject) => {
@@ -57,28 +55,46 @@ export async function exportToPDF(elementId: string, filename: string): Promise<
 
   const pageWidth = 210;
   const pageHeight = 297;
-  const imgWidth = pageWidth;
-  const imgHeight = (img.height * pageWidth) / img.width;
+  const margin = 4; // 4mm edge margin
+  const printableWidth = pageWidth - margin * 2; // 202mm
+  const printableHeight = pageHeight - margin * 2; // 289mm
 
-  if (imgHeight <= pageHeight) {
-    // Fits on a single A4 page
-    pdf.addImage(dataUrl, "PNG", 0, 0, imgWidth, imgHeight, undefined, "FAST");
+  const calculatedHeight = (img.height * printableWidth) / img.width;
+
+  if (calculatedHeight <= printableHeight) {
+    // Fits nicely on a single A4 page
+    pdf.addImage(dataUrl, "PNG", margin, margin, printableWidth, calculatedHeight, undefined, "FAST");
   } else {
-    // Multi-page handling
-    let heightLeft = imgHeight;
-    let position = 0;
+    // If slight overflow, scale smoothly to keep on 1 clean A4 page without clipping or second page
+    const scale = printableHeight / calculatedHeight;
+    if (scale >= 0.78) {
+      const finalWidth = printableWidth * scale;
+      const xOffset = (pageWidth - finalWidth) / 2;
+      pdf.addImage(dataUrl, "PNG", xOffset, margin, finalWidth, printableHeight, undefined, "FAST");
+    } else {
+      // Very long list: split onto multiple pages
+      let heightLeft = calculatedHeight;
+      let position = margin;
+      pdf.addImage(dataUrl, "PNG", margin, position, printableWidth, calculatedHeight, undefined, "FAST");
+      heightLeft -= printableHeight;
 
-    pdf.addImage(dataUrl, "PNG", 0, position, imgWidth, imgHeight, undefined, "FAST");
-    heightLeft -= pageHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(dataUrl, "PNG", 0, position, imgWidth, imgHeight, undefined, "FAST");
-      heightLeft -= pageHeight;
+      while (heightLeft > 0) {
+        position = margin - (calculatedHeight - heightLeft);
+        pdf.addPage();
+        pdf.addImage(dataUrl, "PNG", margin, position, printableWidth, calculatedHeight, undefined, "FAST");
+        heightLeft -= printableHeight;
+      }
     }
   }
 
+  return pdf;
+}
+
+/**
+ * Robust export to PDF using html-to-image + jsPDF
+ */
+export async function exportToPDF(elementId: string, filename: string): Promise<void> {
+  const pdf = await createInvoicePDF(elementId);
   pdf.save(`${filename}.pdf`);
 }
 
@@ -86,29 +102,33 @@ export async function exportToPDF(elementId: string, filename: string): Promise<
  * Generate PDF as Blob for Web Share API
  */
 export async function generatePDFBlob(elementId: string): Promise<Blob> {
-  const { default: jsPDF } = await import("jspdf");
-
-  const dataUrl = await captureElementToPng(elementId);
-
-  const img = new Image();
-  img.src = dataUrl;
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve();
-    img.onerror = () => reject(new Error("Failed to load invoice image"));
-  });
-
-  const pdf = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-  });
-
-  const pageWidth = 210;
-  const imgWidth = pageWidth;
-  const imgHeight = (img.height * pageWidth) / img.width;
-
-  pdf.addImage(dataUrl, "PNG", 0, 0, imgWidth, imgHeight, undefined, "FAST");
+  const pdf = await createInvoicePDF(elementId);
   return pdf.output("blob");
+}
+
+/**
+ * Print Invoice by generating the exact A4 PDF, triggering download, and opening native PDF print!
+ */
+export async function printInvoice(elementId: string, filename: string): Promise<void> {
+  const pdf = await createInvoicePDF(elementId);
+  pdf.autoPrint();
+
+  const blob = pdf.output("blob");
+  const blobUrl = URL.createObjectURL(blob);
+
+  // 1. Download the generated PDF directly so the user gets the file
+  const downloadLink = document.createElement("a");
+  downloadLink.href = blobUrl;
+  downloadLink.download = `${filename}.pdf`;
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  document.body.removeChild(downloadLink);
+
+  // 2. Open PDF in a new tab/window to trigger native print dialog
+  const printWindow = window.open(blobUrl, "_blank");
+  if (printWindow) {
+    printWindow.focus();
+  }
 }
 
 /**
