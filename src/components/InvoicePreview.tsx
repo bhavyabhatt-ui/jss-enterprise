@@ -1,224 +1,246 @@
 "use client";
 
 import { Invoice } from "@/types/invoice";
-import Image from "next/image";
+import { HEADER_IMAGE_BASE64 } from "@/lib/assets";
 
 interface Props {
   invoice: Invoice;
 }
 
 export default function InvoicePreview({ invoice }: Props) {
-  const { invoiceInfo, buyerDetails, items, bankDetails, taxDetails,
-          termsAndConditions, subTotal, cgstAmount, sgstAmount,
-          igstAmount, grandTotal, amountInWords } = invoice;
+  const {
+    invoiceInfo,
+    buyerDetails,
+    items,
+    bankDetails,
+    taxDetails,
+    termsAndConditions,
+    subTotal,
+    cgstAmount,
+    sgstAmount,
+    igstAmount,
+    grandTotal,
+    amountInWords,
+  } = invoice;
+
+  const formatCurrency = (num: number) =>
+    num.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <div
       id="invoice-print-area"
-      className="bg-white text-[#222] font-sans"
-      style={{ fontFamily: "Arial, sans-serif", fontSize: "12px", lineHeight: 1.4 }}
+      className="bg-white text-slate-900 mx-auto w-full max-w-[850px] p-4 sm:p-7 shadow-lg rounded-xl border border-slate-200"
+      style={{
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        fontSize: "12px",
+        lineHeight: 1.4,
+        color: "#0f172a",
+        backgroundColor: "#ffffff",
+      }}
     >
-      {/* ── HEADER ── */}
-      <div className="bg-[#1a1a2e] text-white">
+      {/* ── TOP HEADER BANNER ── */}
+      <div className="rounded-xl overflow-hidden mb-4 shadow-sm border border-slate-800 bg-[#1e2329]">
         <img
-          src="/header.png"
-          alt="JSS Enterprise"
-          style={{ width: "100%", display: "block", objectFit: "contain" }}
+          src={HEADER_IMAGE_BASE64}
+          alt="JSS Enterprise Tax Invoice"
+          className="w-full h-auto block object-contain"
+          style={{ width: "100%", maxHeight: "170px" }}
         />
       </div>
 
-      {/* ── INVOICE INFO + BUYER DETAILS ── */}
-      <div className="grid grid-cols-2 gap-0 border-b border-gray-200">
-        {/* Invoice Info */}
-        <div className="border-r border-gray-200 p-3">
-          <div
-            className="text-white text-xs font-bold uppercase px-2 py-1 mb-3"
-            style={{ background: "#1a1a2e" }}
-          >
-            INVOICE INFORMATION
+      {/* ── INVOICE INFO & BUYER DETAILS (2 COLUMNS) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-3.5">
+        {/* Left: Invoice Information */}
+        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-xs">
+          <div className="bg-[#243342] text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center justify-between">
+            <span>INVOICE INFORMATION</span>
           </div>
-          <table className="w-full text-xs">
-            <tbody>
-              {[
-                ["Invoice No:", invoiceInfo.invoiceNo],
-                ["Invoice Date:", invoiceInfo.invoiceDate],
-                ["Challan No:", invoiceInfo.challanNo],
-                ["P.O. Date / No:", invoiceInfo.poDateNo],
-                ["Place of Supply:", invoiceInfo.placeOfSupply],
-              ].map(([label, value]) => (
-                <tr key={label} className="border-b border-gray-100">
-                  <td className="py-1.5 pr-2 text-[#f5a623] font-medium w-1/2">{label}</td>
-                  <td className="py-1.5 font-semibold text-right">{value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="p-2.5 text-xs divide-y divide-slate-100">
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-500 font-medium">Invoice No:</span>
+              <span className="font-bold text-slate-900 text-right">{invoiceInfo.invoiceNo || "-"}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-500 font-medium">Invoice Date:</span>
+              <span className="font-bold text-slate-900 text-right">{invoiceInfo.invoiceDate || "-"}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-500 font-medium">Challan No:</span>
+              <span className="font-bold text-slate-900 text-right">{invoiceInfo.challanNo || "-"}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-500 font-medium">P.O. Date / No:</span>
+              <span className="font-bold text-slate-900 text-right">{invoiceInfo.poDateNo || "-"}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-500 font-medium">Place of Supply:</span>
+              <span className="font-bold text-slate-900 text-right">{invoiceInfo.placeOfSupply || "-"}</span>
+            </div>
+          </div>
         </div>
 
-        {/* Buyer Details */}
-        <div className="p-3">
-          <div
-            className="text-white text-xs font-bold uppercase px-2 py-1 mb-3"
-            style={{ background: "#1a1a2e" }}
-          >
-            BILLED TO / BUYER DETAILS
+        {/* Right: Billed To / Buyer Details */}
+        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-xs">
+          <div className="bg-[#243342] text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider flex items-center justify-between">
+            <span>BILLED TO / BUYER DETAILS</span>
           </div>
-          <table className="w-full text-xs">
-            <tbody>
-              {[
-                ["Customer Name:", buyerDetails.customerName],
-                ["Address:", buyerDetails.address],
-                ["City / State:", buyerDetails.cityState],
-                ["GSTIN / PAN:", buyerDetails.gstinPan],
-                ["Contact No:", buyerDetails.contactNo],
-              ].map(([label, value]) => (
-                <tr key={label} className="border-b border-gray-100">
-                  <td className="py-1.5 pr-2 text-[#f5a623] font-medium w-5/12">{label}</td>
-                  <td className="py-1.5 font-semibold text-right">{value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="p-2.5 text-xs divide-y divide-slate-100">
+            <div className="flex justify-between items-start py-1">
+              <span className="text-slate-500 font-medium whitespace-nowrap pr-2">Customer Name:</span>
+              <span className="font-bold text-slate-900 text-right">{buyerDetails.customerName || "-"}</span>
+            </div>
+            <div className="flex justify-between items-start py-1">
+              <span className="text-slate-500 font-medium whitespace-nowrap pr-2">Address:</span>
+              <span className="font-bold text-slate-900 text-right text-[11px]">{buyerDetails.address || "-"}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-500 font-medium whitespace-nowrap pr-2">City / State:</span>
+              <span className="font-bold text-slate-900 text-right">{buyerDetails.cityState || "-"}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-500 font-medium whitespace-nowrap pr-2">GSTIN / PAN:</span>
+              <span className="font-bold text-slate-900 text-right">{buyerDetails.gstinPan || "-"}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-500 font-medium whitespace-nowrap pr-2">Contact No:</span>
+              <span className="font-bold text-slate-900 text-right">{buyerDetails.contactNo || "-"}</span>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* ── ITEMS TABLE ── */}
-      <div className="border-b border-gray-200">
+      <div className="border border-slate-300 rounded-lg overflow-hidden mb-3.5 shadow-xs">
         <table className="w-full text-xs border-collapse">
           <thead>
-            <tr style={{ background: "#1a1a2e", color: "#fff" }}>
-              <th className="py-2 px-2 text-center font-bold w-6">#</th>
-              <th className="py-2 px-2 text-left font-bold">Item Description &amp; Specifications</th>
+            <tr className="bg-[#243342] text-white text-[11px]">
+              <th className="py-2 px-2 text-center font-bold w-7">#</th>
+              <th className="py-2 px-3 text-left font-bold">Item Description &amp; Specifications</th>
               <th className="py-2 px-2 text-center font-bold w-20">HSN/SAC</th>
-              <th className="py-2 px-2 text-center font-bold w-10">Qty</th>
-              <th className="py-2 px-2 text-center font-bold w-12">Unit</th>
-              <th className="py-2 px-2 text-right font-bold w-24">Rate (₹)</th>
-              <th className="py-2 px-2 text-right font-bold w-24">Amount (₹)</th>
+              <th className="py-2 px-2 text-center font-bold w-12">Qty</th>
+              <th className="py-2 px-2 text-center font-bold w-14">Unit</th>
+              <th className="py-2 px-3 text-right font-bold w-28">Rate (₹)</th>
+              <th className="py-2 px-3 text-right font-bold w-28">Amount (₹)</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-200">
             {items.map((item, idx) => (
               <tr
                 key={item.id}
-                className="border-b border-gray-100"
-                style={{ background: idx % 2 === 1 ? "#f9fafb" : "#fff" }}
+                className={idx % 2 === 1 ? "bg-slate-50/70" : "bg-white"}
               >
-                <td className="py-2 px-2 text-center text-gray-500">{idx + 1}</td>
-                <td className="py-2 px-2">
-                  <div className="font-semibold text-gray-800">{item.description}</div>
+                <td className="py-2 px-2 text-center text-slate-500 font-medium">{idx + 1}</td>
+                <td className="py-2 px-3 text-left">
+                  <div className="font-bold text-slate-900">{item.description || "-"}</div>
                   {item.specifications && (
-                    <div className="text-gray-500 text-[10px] mt-0.5">{item.specifications}</div>
+                    <div className="text-slate-500 text-[11px] mt-0.5">{item.specifications}</div>
                   )}
                 </td>
-                <td className="py-2 px-2 text-center text-gray-600">{item.hsnSac}</td>
-                <td className="py-2 px-2 text-center">{item.qty}</td>
-                <td className="py-2 px-2 text-center text-gray-600">{item.unit}</td>
-                <td className="py-2 px-2 text-right">
-                  {Number(item.rate).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                </td>
-                <td className="py-2 px-2 text-right font-semibold">
-                  {Number(item.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                </td>
+                <td className="py-2 px-2 text-center text-slate-600 font-mono text-[11px]">{item.hsnSac || "-"}</td>
+                <td className="py-2 px-2 text-center font-semibold text-slate-800">{item.qty}</td>
+                <td className="py-2 px-2 text-center text-slate-600 font-medium">{item.unit}</td>
+                <td className="py-2 px-3 text-right text-slate-700 font-medium">{formatCurrency(Number(item.rate))}</td>
+                <td className="py-2 px-3 text-right font-bold text-slate-900">{formatCurrency(Number(item.amount))}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* ── BANK + TOTALS ── */}
-      <div className="grid grid-cols-2 gap-0 border-b border-gray-200">
-        {/* Bank Details */}
-        <div className="border-r border-gray-200 p-3">
-          <div
-            className="text-white text-xs font-bold uppercase px-2 py-1 mb-3"
-            style={{ background: "#1a1a2e" }}
-          >
-            BANK PAYMENT DETAILS
+      {/* ── BANK DETAILS & TOTALS (2 COLUMNS) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-3.5">
+        {/* Left: Bank Payment Details */}
+        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-xs">
+          <div className="bg-[#243342] text-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider">
+            <span>BANK PAYMENT DETAILS</span>
           </div>
-          <table className="w-full text-xs">
-            <tbody>
-              {[
-                ["Bank Name:", bankDetails.bankName],
-                ["Account Holder:", bankDetails.accountHolder],
-                ["Account No:", bankDetails.accountNo],
-                ["IFSC Code:", bankDetails.ifscCode],
-                ["Branch:", bankDetails.branch],
-              ].map(([label, value]) => (
-                <tr key={label} className="border-b border-gray-100">
-                  <td className="py-1.5 pr-2 text-[#f5a623] font-medium w-5/12">{label}</td>
-                  <td className="py-1.5 font-semibold">{value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="p-2.5 text-xs divide-y divide-slate-100">
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-500 font-medium">Bank Name:</span>
+              <span className="font-bold text-slate-900 text-right">{bankDetails.bankName || "-"}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-500 font-medium">Account Holder:</span>
+              <span className="font-bold text-slate-900 text-right">{bankDetails.accountHolder || "-"}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-500 font-medium">Account No:</span>
+              <span className="font-bold text-slate-900 font-mono text-right">{bankDetails.accountNo || "-"}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-500 font-medium">IFSC Code:</span>
+              <span className="font-bold text-slate-900 font-mono text-right">{bankDetails.ifscCode || "-"}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-500 font-medium">Branch:</span>
+              <span className="font-bold text-slate-900 text-right text-[11px]">{bankDetails.branch || "-"}</span>
+            </div>
+          </div>
         </div>
 
-        {/* Totals */}
-        <div className="p-3">
-          <table className="w-full text-xs">
-            <tbody>
-              {[
-                ["Sub-Total (Excl. Tax)", subTotal, false],
-                [`CGST @ ${taxDetails.cgst}%`, cgstAmount, false],
-                [`SGST @ ${taxDetails.sgst}%`, sgstAmount, false],
-                [`IGST @ ${taxDetails.igst}%`, igstAmount, false],
-              ].map(([label, value]) => (
-                <tr key={String(label)} className="border-b border-gray-100">
-                  <td className="py-1.5 text-gray-600">{String(label)}</td>
-                  <td className="py-1.5 text-right font-semibold">
-                    ₹{Number(value).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* Right: Totals Box */}
+        <div className="border border-slate-300 rounded-lg overflow-hidden bg-white shadow-xs flex flex-col justify-between">
+          <div className="p-2.5 text-xs divide-y divide-slate-100 flex-1">
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-600 font-medium">Sub-Total (Excl. Tax)</span>
+              <span className="font-bold text-slate-900 text-right">₹ {formatCurrency(subTotal)}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-600 font-medium">CGST @ {taxDetails.cgst}%</span>
+              <span className="font-bold text-slate-900 text-right">₹ {formatCurrency(cgstAmount)}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-600 font-medium">SGST @ {taxDetails.sgst}%</span>
+              <span className="font-bold text-slate-900 text-right">₹ {formatCurrency(sgstAmount)}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-600 font-medium">IGST @ {taxDetails.igst}%</span>
+              <span className="font-bold text-slate-900 text-right">₹ {formatCurrency(igstAmount)}</span>
+            </div>
+          </div>
 
-          {/* Grand Total */}
-          <div
-            className="flex justify-between items-center px-3 py-2 mt-2"
-            style={{ background: "#1a1a2e" }}
-          >
-            <span className="text-[#f5a623] font-bold text-sm uppercase tracking-wider">
-              GRAND TOTAL
-            </span>
-            <span className="text-[#f5a623] font-bold text-base">
-              ₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+          {/* Grand Total Bar */}
+          <div className="bg-[#1b2631] px-4 py-2 flex items-center justify-between text-yellow-400">
+            <span className="font-extrabold text-xs uppercase tracking-wider">GRAND TOTAL</span>
+            <span className="font-extrabold text-base tracking-wide">
+              ₹ {formatCurrency(grandTotal)}
             </span>
           </div>
         </div>
       </div>
 
       {/* ── AMOUNT IN WORDS ── */}
-      <div className="border-b border-gray-200 px-4 py-2 bg-gray-50 text-xs">
-        <span className="font-semibold text-gray-700">Amount in Words: </span>
-        <span className="text-gray-800 italic">{amountInWords}</span>
+      <div className="border border-slate-300 rounded-lg px-3.5 py-2 mb-3.5 bg-slate-50/70 text-xs flex items-center flex-wrap gap-1">
+        <span className="font-bold text-slate-800">Amount in Words:</span>
+        <span className="text-slate-900 font-medium italic">{amountInWords}</span>
       </div>
 
-      {/* ── TERMS + SIGNATURE ── */}
-      <div className="grid grid-cols-2 gap-0 mt-1">
-        <div className="border-r border-gray-200 p-4">
-          <div
-            className="text-xs font-bold uppercase mb-2 px-1 py-0.5"
-            style={{ background: "#f0f4f8", borderLeft: "3px solid #1a1a2e" }}
-          >
+      {/* ── TERMS & CONDITIONS + SIGNATORY ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+        {/* Terms */}
+        <div className="border border-slate-200 rounded-lg p-3 bg-white text-[10px] text-slate-600">
+          <div className="font-bold text-slate-800 text-[11px] uppercase tracking-wider mb-1.5 pb-1 border-b border-slate-100">
             TERMS &amp; CONDITIONS
           </div>
-          <ol className="text-[10px] text-gray-600 space-y-0.5 list-none">
-            {termsAndConditions.split("\n").filter(Boolean).map((line, i) => (
-              <li key={i}>{line}</li>
-            ))}
+          <ol className="space-y-1 list-none leading-relaxed">
+            {termsAndConditions
+              .split("\n")
+              .filter(Boolean)
+              .map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
           </ol>
         </div>
-        <div className="p-4 flex flex-col items-end justify-between">
-          <div />
-          <div className="text-right">
-            <p className="text-gray-700 font-semibold text-sm">For, JSS ENTERPRISE</p>
-            <div className="mt-8 mb-1 border-t border-gray-400 w-40 ml-auto" />
-            <p className="text-gray-600 text-xs font-medium">Authorized Signatory</p>
+
+        {/* Signatory */}
+        <div className="border border-slate-200 rounded-lg p-3 bg-white flex flex-col justify-between items-end text-right min-h-[95px]">
+          <p className="font-bold text-slate-900 text-xs">For, JSS ENTERPRISE</p>
+          <div className="w-full">
+            <div className="w-44 border-t border-slate-400 ml-auto mb-1" />
+            <p className="font-semibold text-slate-700 text-[11px]">Authorized Signatory</p>
           </div>
         </div>
       </div>
     </div>
   );
 }
-

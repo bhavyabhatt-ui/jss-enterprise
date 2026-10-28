@@ -22,12 +22,13 @@ function Field({
   required?: boolean;
   textarea?: boolean;
 }) {
-  const cls =
-    "w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-500 text-sm focus:outline-none focus:border-yellow-400/70 focus:ring-1 focus:ring-yellow-400/20 transition-all";
+  const inputClass =
+    "w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 text-xs focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs";
+
   return (
     <div>
-      <label className="block text-slate-300 text-sm font-medium mb-1.5">
-        {label} {required && <span className="text-red-400">*</span>}
+      <label className="block text-slate-700 text-xs font-semibold mb-1.5">
+        {label} {required && <span className="text-rose-500">*</span>}
       </label>
       {textarea ? (
         <textarea
@@ -35,7 +36,7 @@ function Field({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           rows={2}
-          className={cls + " resize-none"}
+          className={`${inputClass} resize-none`}
         />
       ) : (
         <input
@@ -43,7 +44,7 @@ function Field({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className={cls}
+          className={inputClass}
         />
       )}
     </div>
@@ -57,18 +58,19 @@ export default function Step2BuyerDetails({ data, onChange }: Props) {
 
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-yellow-400">Billed To / Buyer Details</h2>
-        <p className="text-slate-400 text-sm mt-1">Enter the buyer&apos;s information</p>
+      {/* Title */}
+      <div className="mb-5 pb-4 border-b border-slate-100">
+        <h3 className="text-base font-bold text-slate-900">Step 2: Billed To / Buyer Details</h3>
+        <p className="text-slate-500 text-xs mt-0.5">Enter the customer or purchasing company details</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="sm:col-span-2">
           <Field
-            label="Customer Name"
+            label="Customer / Company Name"
             value={data.customerName}
             onChange={(v) => update("customerName", v)}
-            placeholder="M/s. Precision Tools Ltd."
+            placeholder="e.g. M/s. Precision Tools Ltd."
             required
           />
         </div>
@@ -77,7 +79,7 @@ export default function Step2BuyerDetails({ data, onChange }: Props) {
             label="Address"
             value={data.address}
             onChange={(v) => update("address", v)}
-            placeholder="Plot No. 45, GIDC Industrial Estate"
+            placeholder="e.g. Plot No. 45, GIDC Industrial Estate"
             textarea
           />
         </div>
@@ -85,24 +87,23 @@ export default function Step2BuyerDetails({ data, onChange }: Props) {
           label="City / State"
           value={data.cityState}
           onChange={(v) => update("cityState", v)}
-          placeholder="Odhav, Ahmedabad - 382415"
+          placeholder="e.g. Odhav, Ahmedabad - 382415"
         />
         <Field
           label="GSTIN / PAN"
           value={data.gstinPan}
           onChange={(v) => update("gstinPan", v)}
-          placeholder="24AAACP1234F1Z2"
+          placeholder="e.g. 24AAACP1234F1Z2"
         />
         <div className="sm:col-span-2">
           <Field
-            label="Contact No"
+            label="Contact No (Used for direct WhatsApp sharing)"
             value={data.contactNo}
             onChange={(v) => update("contactNo", v)}
-            placeholder="+91 98765 43210"
+            placeholder="e.g. +91 98765 43210"
           />
         </div>
       </div>
     </div>
   );
 }
-

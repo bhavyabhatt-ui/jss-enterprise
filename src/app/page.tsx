@@ -4,9 +4,19 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { getAllInvoices, deleteInvoice } from "@/lib/storage";
 import { Invoice } from "@/types/invoice";
+import { shareInvoiceToWhatsApp } from "@/lib/export";
 import {
-  Plus, FileText, Trash2, Edit, Eye, Search,
-  TrendingUp, IndianRupee, FileStack, Calendar
+  Plus,
+  Trash2,
+  Edit,
+  Eye,
+  Search,
+  TrendingUp,
+  IndianRupee,
+  FileStack,
+  Calendar,
+  Share2,
+  FileText,
 } from "lucide-react";
 
 export default function DashboardPage() {
@@ -21,7 +31,8 @@ export default function DashboardPage() {
   const filtered = invoices.filter(
     (inv) =>
       inv.invoiceInfo.invoiceNo.toLowerCase().includes(search.toLowerCase()) ||
-      inv.buyerDetails.customerName.toLowerCase().includes(search.toLowerCase())
+      inv.buyerDetails.customerName.toLowerCase().includes(search.toLowerCase()) ||
+      inv.buyerDetails.contactNo.includes(search)
   );
 
   const totalRevenue = invoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
@@ -31,23 +42,26 @@ export default function DashboardPage() {
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
 
-  function handleDelete(id: string) {
-    setDeletingId(id);
-    setTimeout(() => {
-      deleteInvoice(id);
-      setInvoices(getAllInvoices());
-      setDeletingId(null);
-    }, 300);
+  function handleDelete(id: string, invoiceNo: string) {
+    if (confirm(`Are you sure you want to delete invoice ${invoiceNo || id}?`)) {
+      setDeletingId(id);
+      setTimeout(() => {
+        deleteInvoice(id);
+        setInvoices(getAllInvoices());
+        setDeletingId(null);
+      }, 250);
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Top Nav */}
-      <nav className="bg-slate-900/90 backdrop-blur border-b border-slate-700/60 sticky top-0 z-50">
+    <div className="min-h-screen bg-slate-50 text-slate-800">
+      {/* ── TOP NAVIGATION ── */}
+      <header className="bg-white border-b border-slate-200/80 sticky top-0 z-50 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
+            {/* Brand Logo & Name */}
             <Link href="/" className="flex items-center gap-3 group">
-              <div className="w-11 h-11 rounded-lg overflow-hidden border border-yellow-500/40 bg-slate-950 flex items-center justify-center p-0.5 shadow-md shadow-yellow-500/10 group-hover:border-yellow-400 transition-all">
+              <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-white p-0.5 shadow-xs group-hover:border-amber-400 transition-colors">
                 <img
                   src="/logo.png"
                   alt="JSS Enterprise Logo"
@@ -55,153 +69,196 @@ export default function DashboardPage() {
                 />
               </div>
               <div>
-                <p className="font-extrabold text-yellow-400 text-base tracking-wider leading-none">JSS ENTERPRISE</p>
-                <p className="text-slate-400 text-[10px] tracking-widest font-semibold mt-0.5 uppercase">Precision | Power | Progress</p>
+                <h1 className="font-extrabold text-slate-900 text-base tracking-wide leading-none group-hover:text-amber-600 transition-colors">
+                  JSS ENTERPRISE
+                </h1>
+                <p className="text-slate-400 text-[10px] tracking-widest font-semibold mt-0.5 uppercase">
+                  Precision | Power | Progress
+                </p>
               </div>
             </Link>
-            <Link
-              href="/invoice/new"
-              className="flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-sm transition-all shadow-lg shadow-yellow-500/20 active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create Bill</span>
-            </Link>
+
+            {/* Action */}
+            <div className="flex items-center gap-2">
+              <Link
+                href="/invoice/new"
+                className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-lg text-sm transition-all shadow-sm shadow-amber-500/20 active:scale-98"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Bill</span>
+              </Link>
+            </div>
           </div>
         </div>
-      </nav>
+      </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats */}
+      {/* ── MAIN CONTENT ── */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Overview Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
             {
               icon: FileStack,
               label: "Total Invoices",
               value: invoices.length,
-              color: "from-blue-500 to-blue-700",
-              textColor: "text-blue-400",
+              badgeBg: "bg-blue-50 text-blue-700 border-blue-100",
             },
             {
               icon: IndianRupee,
               label: "Total Revenue",
               value: `₹${totalRevenue.toLocaleString("en-IN")}`,
-              color: "from-green-500 to-green-700",
-              textColor: "text-green-400",
+              badgeBg: "bg-emerald-50 text-emerald-700 border-emerald-100",
             },
             {
               icon: Calendar,
               label: "This Month",
               value: thisMonth.length,
-              color: "from-purple-500 to-purple-700",
-              textColor: "text-purple-400",
+              badgeBg: "bg-purple-50 text-purple-700 border-purple-100",
             },
             {
               icon: TrendingUp,
-              label: "Avg Invoice",
+              label: "Average Value",
               value: invoices.length
                 ? `₹${Math.round(totalRevenue / invoices.length).toLocaleString("en-IN")}`
                 : "₹0",
-              color: "from-orange-500 to-orange-700",
-              textColor: "text-orange-400",
+              badgeBg: "bg-amber-50 text-amber-700 border-amber-100",
             },
           ].map((stat, i) => (
             <div
               key={i}
-              className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-4 backdrop-blur"
+              className="bg-white border border-slate-200/80 rounded-xl p-4.5 shadow-xs hover:shadow-sm transition-shadow"
             >
-              <div className={`inline-flex p-2 rounded-lg bg-gradient-to-br ${stat.color} mb-3`}>
-                <stat.icon className="w-4 h-4 text-white" />
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-slate-500 text-xs font-medium uppercase tracking-wider">{stat.label}</span>
+                <div className={`p-2 rounded-lg border ${stat.badgeBg}`}>
+                  <stat.icon className="w-4 h-4" />
+                </div>
               </div>
-              <p className="text-slate-400 text-xs mb-1">{stat.label}</p>
-              <p className={`font-bold text-lg ${stat.textColor}`}>{stat.value}</p>
+              <p className="font-bold text-xl text-slate-900">{stat.value}</p>
             </div>
           ))}
         </div>
 
-        {/* Search & List */}
-        <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl backdrop-blur overflow-hidden">
-          <div className="p-4 sm:p-6 border-b border-slate-700/50 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            <h2 className="text-white font-semibold text-lg">All Invoices</h2>
-            <div className="relative w-full sm:w-64">
+        {/* Invoice List Panel */}
+        <div className="bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden">
+          {/* Header Bar */}
+          <div className="p-4 sm:p-5 border-b border-slate-200/80 flex flex-col sm:flex-row gap-3.5 items-start sm:items-center justify-between bg-slate-50/50">
+            <div>
+              <h2 className="text-slate-900 font-bold text-base">Invoices &amp; Bills</h2>
+              <p className="text-slate-500 text-xs">Manage, view, export, and share your bills</p>
+            </div>
+
+            {/* Search Box */}
+            <div className="relative w-full sm:w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search invoice or customer..."
+                placeholder="Search invoice, customer, or phone..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 text-sm focus:outline-none focus:border-yellow-400/50 focus:ring-1 focus:ring-yellow-400/20"
+                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 text-xs focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
               />
             </div>
           </div>
 
+          {/* Table / Empty State */}
           {filtered.length === 0 ? (
-            <div className="py-20 text-center">
-              <div className="w-16 h-16 rounded-2xl overflow-hidden border border-yellow-500/30 bg-slate-900 mx-auto mb-4 p-1 shadow-lg shadow-black/40">
-                <img src="/logo.png" alt="JSS Enterprise" className="w-full h-full object-contain opacity-80" />
+            <div className="py-16 text-center px-4">
+              <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
+                <FileText className="w-7 h-7" />
               </div>
-              <p className="text-slate-300 text-lg font-bold">No Invoices Found</p>
-              <p className="text-slate-500 text-sm mb-6">Create a new Tax Invoice for JSS ENTERPRISE</p>
+              <h3 className="text-slate-800 font-bold text-base">No Invoices Found</h3>
+              <p className="text-slate-500 text-xs mt-1 mb-5 max-w-sm mx-auto">
+                {search ? "No bills matched your search query. Try another keyword." : "You haven't generated any bills yet. Click below to create your first invoice."}
+              </p>
               <Link
                 href="/invoice/new"
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-950 font-bold px-6 py-2.5 rounded-xl text-sm shadow-lg shadow-yellow-500/25 hover:from-yellow-300 hover:to-amber-400 transition-all"
+                className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-lg text-xs shadow-xs transition-colors"
               >
                 <Plus className="w-4 h-4" /> Create New Bill
               </Link>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="border-b border-slate-700/50">
-                    <th className="text-left text-slate-400 text-xs font-medium px-4 sm:px-6 py-3 uppercase tracking-wider">Invoice No</th>
-                    <th className="text-left text-slate-400 text-xs font-medium px-4 py-3 uppercase tracking-wider hidden sm:table-cell">Customer</th>
-                    <th className="text-left text-slate-400 text-xs font-medium px-4 py-3 uppercase tracking-wider hidden md:table-cell">Date</th>
-                    <th className="text-right text-slate-400 text-xs font-medium px-4 py-3 uppercase tracking-wider">Amount</th>
-                    <th className="text-center text-slate-400 text-xs font-medium px-4 sm:px-6 py-3 uppercase tracking-wider">Actions</th>
+                  <tr className="border-b border-slate-200 bg-slate-50/60 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="px-4 sm:px-6 py-3">Invoice No</th>
+                    <th className="px-4 py-3">Customer / Buyer</th>
+                    <th className="px-4 py-3 hidden md:table-cell">Date</th>
+                    <th className="px-4 py-3 text-right">Grand Total</th>
+                    <th className="px-4 sm:px-6 py-3 text-center w-36">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-700/30">
+                <tbody className="divide-y divide-slate-100">
                   {filtered.map((inv) => (
                     <tr
                       key={inv.id}
-                      className={`hover:bg-slate-700/30 transition-all duration-200 ${
-                        deletingId === inv.id ? "opacity-0 scale-95" : "opacity-100"
+                      className={`hover:bg-slate-50/80 transition-all ${
+                        deletingId === inv.id ? "opacity-30 scale-98" : ""
                       }`}
                     >
-                      <td className="px-4 sm:px-6 py-4">
-                        <span className="text-yellow-400 font-medium text-sm">{inv.invoiceInfo.invoiceNo}</span>
+                      {/* Invoice No */}
+                      <td className="px-4 sm:px-6 py-3.5">
+                        <Link
+                          href={`/invoice/${inv.id}`}
+                          className="font-bold text-amber-600 hover:text-amber-700 hover:underline inline-flex items-center gap-1.5"
+                        >
+                          <span>{inv.invoiceInfo.invoiceNo || "INV-DRAFT"}</span>
+                        </Link>
                       </td>
-                      <td className="px-4 py-4 hidden sm:table-cell">
-                        <span className="text-white text-sm">{inv.buyerDetails.customerName}</span>
+
+                      {/* Customer */}
+                      <td className="px-4 py-3.5">
+                        <p className="font-semibold text-slate-900">{inv.buyerDetails.customerName || "Customer"}</p>
+                        <p className="text-slate-400 text-[11px] truncate max-w-xs">{inv.buyerDetails.cityState || inv.buyerDetails.address}</p>
                       </td>
-                      <td className="px-4 py-4 hidden md:table-cell">
-                        <span className="text-slate-400 text-sm">{inv.invoiceInfo.invoiceDate}</span>
+
+                      {/* Date */}
+                      <td className="px-4 py-3.5 hidden md:table-cell text-slate-600 font-medium">
+                        {inv.invoiceInfo.invoiceDate}
                       </td>
-                      <td className="px-4 py-4 text-right">
-                        <span className="text-green-400 font-semibold text-sm">
-                          ₹{inv.grandTotal.toLocaleString("en-IN")}
-                        </span>
+
+                      {/* Amount */}
+                      <td className="px-4 py-3.5 text-right font-bold text-slate-900">
+                        ₹ {inv.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="px-4 sm:px-6 py-4">
-                        <div className="flex items-center justify-center gap-2">
+
+                      {/* Actions */}
+                      <td className="px-4 sm:px-6 py-3.5">
+                        <div className="flex items-center justify-center gap-1">
+                          {/* View */}
                           <Link
                             href={`/invoice/${inv.id}`}
-                            className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-all"
-                            title="View"
+                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                            title="View & Export Bill"
                           >
                             <Eye className="w-4 h-4" />
                           </Link>
+
+                          {/* WhatsApp */}
+                          <button
+                            onClick={() => shareInvoiceToWhatsApp(inv)}
+                            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                            title="Share on WhatsApp"
+                          >
+                            <Share2 className="w-4 h-4" />
+                          </button>
+
+                          {/* Edit */}
                           <Link
                             href={`/invoice/${inv.id}/edit`}
-                            className="p-1.5 text-slate-400 hover:text-yellow-400 hover:bg-yellow-400/10 rounded-lg transition-all"
-                            title="Edit"
+                            className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
+                            title="Edit Bill"
                           >
                             <Edit className="w-4 h-4" />
                           </Link>
+
+                          {/* Delete */}
                           <button
-                            onClick={() => handleDelete(inv.id)}
-                            className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
-                            title="Delete"
+                            onClick={() => handleDelete(inv.id, inv.invoiceInfo.invoiceNo)}
+                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                            title="Delete Bill"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -214,7 +271,7 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

@@ -2,9 +2,9 @@
 
 :root {
   --jss-gold: #f5a623;
-  --jss-dark: #1a1a2e;
-  --jss-navy: #16213e;
-  --jss-accent: #0f3460;
+  --jss-dark: #1e293b;
+  --jss-navy: #2b3a4a;
+  --jss-accent: #d97706;
 }
 
 * {
@@ -12,54 +12,57 @@
 }
 
 body {
-  background: #f0f4f8;
+  background-color: #f8fafc;
+  color: #0f172a;
   min-height: 100vh;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
-/* Custom scrollbar */
+/* Subtle clean scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #f1f5f9;
 }
 ::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 3px;
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
-/* Print styles */
+/* Print styles for pixel-perfect printing */
 @media print {
+  body {
+    background: #ffffff !important;
+  }
   .no-print {
     display: none !important;
   }
-  .print-area {
-    width: 100% !important;
+  #invoice-print-area {
     box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
   }
 }
 
-/* Invoice preview animations */
-.step-enter {
-  opacity: 0;
-  transform: translateX(20px);
-}
-.step-enter-active {
-  opacity: 1;
-  transform: translateX(0);
-  transition: all 0.3s ease;
+/* Smooth step transitions */
+.step-fade-in {
+  animation: fadeIn 0.25s ease-in-out;
 }
 
-/* Gold gradient text */
-.gold-text {
-  background: linear-gradient(135deg, #f5a623, #f9d423);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Table zebra striping */
-.invoice-table tr:nth-child(even) {
-  background-color: #f8fafc;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

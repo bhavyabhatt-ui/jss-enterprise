@@ -13,6 +13,7 @@ import Step2BuyerDetails from "@/components/steps/Step2BuyerDetails";
 import Step3Items from "@/components/steps/Step3Items";
 import Step4BankDetails from "@/components/steps/Step4BankDetails";
 import Step5Summary from "@/components/steps/Step5Summary";
+import { ArrowLeft, ArrowRight, Save } from "lucide-react";
 
 const defaultInvoice: Omit<Invoice, "id" | "createdAt" | "updatedAt"> = {
   invoiceInfo: {
@@ -60,7 +61,7 @@ const defaultInvoice: Omit<Invoice, "id" | "createdAt" | "updatedAt"> = {
   sgstAmount: 0,
   igstAmount: 0,
   grandTotal: 0,
-  amountInWords: "",
+  amountInWords: "Zero Rupees Only",
 };
 
 interface InvoiceFormProps {
@@ -74,28 +75,28 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
   const [data, setData] = useState<Omit<Invoice, "id" | "createdAt" | "updatedAt">>(
     initialData
       ? {
-        invoiceInfo: initialData.invoiceInfo,
-        buyerDetails: initialData.buyerDetails,
-        items: initialData.items,
-        bankDetails: initialData.bankDetails,
-        taxDetails: initialData.taxDetails,
-        termsAndConditions: initialData.termsAndConditions,
-        subTotal: initialData.subTotal,
-        cgstAmount: initialData.cgstAmount,
-        sgstAmount: initialData.sgstAmount,
-        igstAmount: initialData.igstAmount,
-        grandTotal: initialData.grandTotal,
-        amountInWords: initialData.amountInWords,
-      }
+          invoiceInfo: initialData.invoiceInfo,
+          buyerDetails: initialData.buyerDetails,
+          items: initialData.items,
+          bankDetails: initialData.bankDetails,
+          taxDetails: initialData.taxDetails,
+          termsAndConditions: initialData.termsAndConditions,
+          subTotal: initialData.subTotal,
+          cgstAmount: initialData.cgstAmount,
+          sgstAmount: initialData.sgstAmount,
+          igstAmount: initialData.igstAmount,
+          grandTotal: initialData.grandTotal,
+          amountInWords: initialData.amountInWords,
+        }
       : defaultInvoice
   );
 
   const recalculate = useCallback(
     (items: InvoiceItem[], cgst: number, sgst: number, igst: number) => {
-      const subTotal = items.reduce((sum, item) => sum + item.amount, 0);
-      const cgstAmount = (subTotal * cgst) / 100;
-      const sgstAmount = (subTotal * sgst) / 100;
-      const igstAmount = (subTotal * igst) / 100;
+      const subTotal = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+      const cgstAmount = (subTotal * Number(cgst)) / 100;
+      const sgstAmount = (subTotal * Number(sgst)) / 100;
+      const igstAmount = (subTotal * Number(igst)) / 100;
       const grandTotal = subTotal + cgstAmount + sgstAmount + igstAmount;
       const amountInWords = numberToWords(grandTotal);
       return { subTotal, cgstAmount, sgstAmount, igstAmount, grandTotal, amountInWords };
@@ -142,64 +143,62 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
   const stepLabels = [
     "Invoice Info",
     "Buyer Details",
-    "Items",
-    "Bank Details",
-    "Summary",
+    "Products & Tax",
+    "Bank & Terms",
+    "Preview & Save",
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header */}
-      <div className="bg-slate-900/90 backdrop-blur border-b border-slate-700/60 sticky top-0 z-40">
+    <div className="min-h-screen bg-slate-50 text-slate-800 pb-16">
+      {/* ── TOP HEADER BAR ── */}
+      <header className="bg-white border-b border-slate-200/80 sticky top-0 z-40 shadow-xs">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.push("/")}
-              className="text-slate-400 hover:text-yellow-400 text-sm flex items-center gap-1.5 transition-colors font-medium bg-slate-800/80 hover:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700/50"
+              className="text-slate-600 hover:text-slate-900 text-xs font-semibold flex items-center gap-1.5 transition-colors bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg border border-slate-200"
             >
-              ← Dashboard
+              <ArrowLeft className="w-3.5 h-3.5" /> Dashboard
             </button>
-            <div className="hidden sm:flex items-center gap-2.5 pl-2 border-l border-slate-700">
-              <div className="w-8 h-8 rounded-lg overflow-hidden border border-yellow-500/40 bg-slate-950 p-0.5 shadow">
-                <img
-                  src="/logo.png"
-                  alt="JSS Enterprise"
-                  className="w-full h-full object-contain"
-                />
+            <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-slate-200">
+              <div className="w-7 h-7 rounded-md overflow-hidden border border-slate-200 bg-white p-0.5">
+                <img src="/logo.png" alt="JSS Enterprise" className="w-full h-full object-contain" />
               </div>
-              <div>
-                <p className="font-extrabold text-yellow-400 text-xs tracking-wider leading-none">JSS ENTERPRISE</p>
-                <p className="text-slate-400 text-[9px] tracking-wider uppercase font-semibold">Billing System</p>
-              </div>
+              <span className="font-extrabold text-slate-900 text-xs tracking-wide">JSS ENTERPRISE</span>
             </div>
           </div>
-          <h1 className="text-yellow-400 font-bold text-base sm:text-lg">
+
+          <h2 className="text-slate-900 font-bold text-sm sm:text-base">
             {mode === "new" ? "Create Tax Invoice" : "Edit Tax Invoice"}
-          </h1>
-          <div className="text-slate-300 text-xs sm:text-sm font-semibold bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
+          </h2>
+
+          <div className="text-slate-500 text-xs font-semibold bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
             Step {step} of 5
           </div>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-5xl mx-auto px-4 py-6">
+      {/* ── FORM CONTAINER ── */}
+      <main className="max-w-5xl mx-auto px-4 py-6">
         {/* Step Indicator */}
         <StepIndicator currentStep={step} steps={stepLabels} />
 
-        {/* Step Content */}
-        <div className="mt-6 bg-slate-800/60 border border-slate-700/50 rounded-2xl backdrop-blur overflow-hidden">
+        {/* Step Card Content */}
+        <div className="bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden step-fade-in">
           {step === 1 && (
             <Step1InvoiceInfo
               data={data.invoiceInfo}
               onChange={(invoiceInfo) => setData((p) => ({ ...p, invoiceInfo }))}
             />
           )}
+
           {step === 2 && (
             <Step2BuyerDetails
               data={data.buyerDetails}
               onChange={(buyerDetails) => setData((p) => ({ ...p, buyerDetails }))}
             />
           )}
+
           {step === 3 && (
             <Step3Items
               items={data.items}
@@ -213,6 +212,7 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
               onTaxChange={updateTax}
             />
           )}
+
           {step === 4 && (
             <Step4BankDetails
               bankDetails={data.bankDetails}
@@ -223,6 +223,7 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
               }
             />
           )}
+
           {step === 5 && (
             <Step5Summary
               data={data}
@@ -231,27 +232,29 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
             />
           )}
 
-          {/* Navigation Buttons */}
+          {/* Navigation Controls */}
           {step < 5 && (
-            <div className="px-6 py-4 border-t border-slate-700/50 flex justify-between">
+            <div className="px-6 py-4 bg-slate-50/70 border-t border-slate-200 flex justify-between items-center">
               <button
+                type="button"
                 onClick={() => setStep((s) => Math.max(1, s - 1) as Step)}
                 disabled={step === 1}
-                className="px-5 py-2 rounded-lg border border-slate-600 text-slate-300 text-sm font-medium hover:bg-slate-700/50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                ← Previous
+                <ArrowLeft className="w-3.5 h-3.5" /> Previous
               </button>
+
               <button
+                type="button"
                 onClick={() => setStep((s) => Math.min(5, s + 1) as Step)}
-                className="px-6 py-2 rounded-lg bg-yellow-400 hover:bg-yellow-300 text-slate-900 text-sm font-semibold transition-all shadow-lg shadow-yellow-400/20"
+                className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition-all shadow-xs active:scale-98"
               >
-                Next →
+                Next <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
-
