@@ -24,7 +24,7 @@ export default function Step5Summary({ data, onSave, mode, isSaving }: Props) {
       {/* Title & Save Bar */}
       <div className="mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-slate-50/70 p-3 sm:p-4 rounded-xl border">
         <div>
-          <h3 className="text-sm sm:text-base font-bold text-slate-900">Step 5: Live Invoice Preview</h3>
+          <h3 className="text-sm sm:text-base font-bold text-slate-900">Final Step: Live Invoice Preview</h3>
           <p className="text-slate-500 text-xs mt-0.5">
             Review the complete bill. Click below to save and unlock exports.
           </p>

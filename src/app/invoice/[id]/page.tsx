@@ -67,10 +67,10 @@ export default function InvoiceViewPage() {
         showToast("PNG Image downloaded successfully!");
       } else if (type === "word") {
         await exportToWord(invoice);
-        showToast("Word document (.docx) with header image downloaded!");
+        showToast("Word document (.docx) downloaded!");
       } else if (type === "whatsapp") {
         await shareInvoiceToWhatsApp(invoice, "invoice-print-area");
-        showToast("Opening WhatsApp with formatted invoice details...");
+        showToast("Opening share dialog with attached PDF & bill details...");
       }
     } catch (err: any) {
       console.error(err);

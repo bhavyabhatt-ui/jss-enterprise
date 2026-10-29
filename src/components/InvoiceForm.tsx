@@ -3,11 +3,12 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
-import { Invoice, InvoiceItem, Step } from "@/types/invoice";
+import { Invoice, InvoiceItem, Step, DEFAULT_COMPANY_HEADER } from "@/types/invoice";
 import { saveInvoice, numberToWords, logoutAdmin } from "@/lib/storage";
 
 // Step Components
 import StepIndicator from "@/components/StepIndicator";
+import Step0HeaderDetails from "@/components/steps/Step0HeaderDetails";
 import Step1InvoiceInfo from "@/components/steps/Step1InvoiceInfo";
 import Step2BuyerDetails from "@/components/steps/Step2BuyerDetails";
 import Step3Items from "@/components/steps/Step3Items";
@@ -16,6 +17,7 @@ import Step5Summary from "@/components/steps/Step5Summary";
 import { ArrowLeft, ArrowRight, Save, LogOut } from "lucide-react";
 
 const defaultInvoice: Omit<Invoice, "id" | "createdAt" | "updatedAt"> = {
+  header: { ...DEFAULT_COMPANY_HEADER },
   invoiceInfo: {
     invoiceNo: "",
     invoiceDate: new Date().toLocaleDateString("en-IN"),
@@ -77,6 +79,7 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
   const [data, setData] = useState<Omit<Invoice, "id" | "createdAt" | "updatedAt">>(
     initialData
       ? {
+          header: initialData.header || { ...DEFAULT_COMPANY_HEADER },
           invoiceInfo: initialData.invoiceInfo,
           buyerDetails: initialData.buyerDetails,
           items: initialData.items,
@@ -150,6 +153,7 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
   }
 
   const stepLabels = [
+    "Company Header",
     "Invoice Info",
     "Buyer Details",
     "Products & Tax",
@@ -183,7 +187,7 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
 
           <div className="flex items-center gap-2">
             <div className="text-slate-500 text-xs font-semibold bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-              Step {step} of 5
+              Step {step} of 6
             </div>
             <button
               type="button"
@@ -205,20 +209,27 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
         {/* Step Card Content */}
         <div className="bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden step-fade-in">
           {step === 1 && (
+            <Step0HeaderDetails
+              data={data.header}
+              onChange={(header) => setData((p) => ({ ...p, header }))}
+            />
+          )}
+
+          {step === 2 && (
             <Step1InvoiceInfo
               data={data.invoiceInfo}
               onChange={(invoiceInfo) => setData((p) => ({ ...p, invoiceInfo }))}
             />
           )}
 
-          {step === 2 && (
+          {step === 3 && (
             <Step2BuyerDetails
               data={data.buyerDetails}
               onChange={(buyerDetails) => setData((p) => ({ ...p, buyerDetails }))}
             />
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <Step3Items
               items={data.items}
               taxDetails={data.taxDetails}
@@ -232,7 +243,7 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
             />
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <Step4BankDetails
               bankDetails={data.bankDetails}
               termsAndConditions={data.termsAndConditions}
@@ -243,7 +254,7 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
             />
           )}
 
-          {step === 5 && (
+          {step === 6 && (
             <Step5Summary
               data={data}
               onSave={handleSave}
@@ -253,7 +264,7 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
           )}
 
           {/* Navigation Controls */}
-          {step < 5 && (
+          {step < 6 && (
             <div className="px-6 py-4 bg-slate-50/70 border-t border-slate-200 flex justify-between items-center">
               <button
                 type="button"
@@ -266,7 +277,7 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
 
               <button
                 type="button"
-                onClick={() => setStep((s) => Math.min(5, s + 1) as Step)}
+                onClick={() => setStep((s) => Math.min(6, s + 1) as Step)}
                 className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold transition-all shadow-xs active:scale-98"
               >
                 Next <ArrowRight className="w-3.5 h-3.5" />

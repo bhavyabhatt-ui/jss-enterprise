@@ -1,3 +1,25 @@
+export interface CompanyHeader {
+  companyName: string;
+  tagline: string;
+  address: string;
+  phone: string;
+  email: string;
+  invoiceTitle: string;
+  gstin: string;
+  stateCode: string;
+}
+
+export const DEFAULT_COMPANY_HEADER: CompanyHeader = {
+  companyName: "JSS ENTERPRISE",
+  tagline: "PRECISION | POWER | PROGRESS",
+  address: "Pushpak (Kathwada) Co-Op Housing Society Ltd., Bhagirath Villa, Kathwada Road, Ahmedabad - 382430, Gujarat, India",
+  phone: "+91 8905605092",
+  email: "jssenterprise0411@gmail.com",
+  invoiceTitle: "TAX INVOICE",
+  gstin: "24LRHPS9541P1ZN",
+  stateCode: "24 (Gujarat)",
+};
+
 export interface InvoiceItem {
   id: string;
   description: string;
@@ -43,6 +65,7 @@ export interface Invoice {
   id: string;
   createdAt: string;
   updatedAt: string;
+  header: CompanyHeader;
   invoiceInfo: InvoiceInfo;
   buyerDetails: BuyerDetails;
   items: InvoiceItem[];
@@ -57,5 +80,4 @@ export interface Invoice {
   amountInWords: string;
 }
 
-export type Step = 1 | 2 | 3 | 4 | 5;
-
+export type Step = 1 | 2 | 3 | 4 | 5 | 6;

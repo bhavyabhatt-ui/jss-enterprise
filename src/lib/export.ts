@@ -1,4 +1,4 @@
-import { Invoice } from "@/types/invoice";
+import { Invoice, DEFAULT_COMPANY_HEADER } from "@/types/invoice";
 import { HEADER_IMAGE_BASE64 } from "@/lib/assets";
 
 /**
@@ -166,6 +166,7 @@ export async function exportToWord(invoice: Invoice): Promise<void> {
   } = await import("docx");
   const { saveAs } = await import("file-saver");
 
+  const header = invoice.header || DEFAULT_COMPANY_HEADER;
   const {
     invoiceInfo,
     buyerDetails,
@@ -181,27 +182,6 @@ export async function exportToWord(invoice: Invoice): Promise<void> {
     termsAndConditions,
   } = invoice;
 
-  // Convert Base64 image to Uint8Array for docx ImageRun
-  let headerImageRun: any = null;
-  try {
-    const base64Data = HEADER_IMAGE_BASE64.replace(/^data:image\/\w+;base64,/, "");
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    headerImageRun = new ImageRun({
-      data: bytes,
-      transformation: {
-        width: 600,
-        height: 122,
-      },
-      type: "png",
-    });
-  } catch (err) {
-    console.error("Failed to convert header image for Word:", err);
-  }
-
   const tableBorder = {
     top: { style: BorderStyle.SINGLE, size: 1, color: "D1D5DB" },
     bottom: { style: BorderStyle.SINGLE, size: 1, color: "D1D5DB" },
@@ -213,6 +193,12 @@ export async function exportToWord(invoice: Invoice): Promise<void> {
     type: ShadingType.SOLID,
     color: "243342",
     fill: "243342",
+  };
+
+  const darkHeaderShading = {
+    type: ShadingType.SOLID,
+    color: "1E2329",
+    fill: "1E2329",
   };
 
   const sectionHeader = (title: string) =>
@@ -245,22 +231,63 @@ export async function exportToWord(invoice: Invoice): Promise<void> {
 
   const children: any[] = [];
 
-  // Top header image
-  if (headerImageRun) {
-    children.push(
-      new Paragraph({
-        children: [headerImageRun],
-        alignment: AlignmentType.CENTER,
-      })
-    );
-  } else {
-    children.push(
-      new Paragraph({
-        children: [new TextRun({ text: "JSS ENTERPRISE — TAX INVOICE", bold: true, size: 28, color: "243342" })],
-        alignment: AlignmentType.CENTER,
-      })
-    );
-  }
+  // Top Dynamic Company Header Table
+  const companyHeaderTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({
+        children: [
+          // Left: Company details
+          new TableCell({
+            width: { size: 70, type: WidthType.PERCENTAGE },
+            shading: darkHeaderShading,
+            margins: { top: 120, bottom: 120, left: 140, right: 140 },
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: header.companyName, bold: true, size: 26, color: "F59E0B" })],
+              }),
+              new Paragraph({
+                children: [new TextRun({ text: header.tagline, size: 16, color: "CBD5E1" })],
+              }),
+              new Paragraph({
+                children: [new TextRun({ text: header.address, size: 16, color: "E2E8F0" })],
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "Mobile: ", bold: true, color: "F59E0B", size: 16 }),
+                  new TextRun({ text: `${header.phone} | `, color: "FFFFFF", size: 16 }),
+                  new TextRun({ text: "Email: ", bold: true, color: "F59E0B", size: 16 }),
+                  new TextRun({ text: header.email, color: "FFFFFF", size: 16 }),
+                ],
+              }),
+            ],
+          }),
+          // Right: Document Title & GSTIN
+          new TableCell({
+            width: { size: 30, type: WidthType.PERCENTAGE },
+            shading: darkHeaderShading,
+            margins: { top: 120, bottom: 120, left: 140, right: 140 },
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: header.invoiceTitle, bold: true, size: 24, color: "F59E0B" })],
+                alignment: AlignmentType.RIGHT,
+              }),
+              new Paragraph({
+                children: [new TextRun({ text: `GSTIN: ${header.gstin}`, bold: true, size: 16, color: "FFFFFF" })],
+                alignment: AlignmentType.RIGHT,
+              }),
+              new Paragraph({
+                children: [new TextRun({ text: `State Code: ${header.stateCode}`, size: 15, color: "94A3B8" })],
+                alignment: AlignmentType.RIGHT,
+              }),
+            ],
+          }),
+        ],
+      }),
+    ],
+  });
+
+  children.push(companyHeaderTable);
 
   children.push(new Paragraph({ text: "" }));
 
@@ -605,7 +632,8 @@ export async function exportToWord(invoice: Invoice): Promise<void> {
  * Format invoice data as clean text for WhatsApp
  */
 export function formatInvoiceForWhatsApp(invoice: Invoice): string {
-  const { invoiceInfo, buyerDetails, items, bankDetails, grandTotal, amountInWords, subTotal, cgstAmount, sgstAmount } = invoice;
+  const header = invoice.header || DEFAULT_COMPANY_HEADER;
+  const { invoiceInfo, buyerDetails, items, bankDetails, grandTotal, amountInWords, subTotal, cgstAmount, sgstAmount, igstAmount } = invoice;
 
   const itemLines = items
     .map(
@@ -614,25 +642,25 @@ export function formatInvoiceForWhatsApp(invoice: Invoice): string {
     )
     .join("\n");
 
-  const text = `*TAX INVOICE — JSS ENTERPRISE*
-_PRECISION | POWER | PROGRESS_
-Pushpak Co-Op Hsg Soc., Kathwada Road, Ahmedabad - 382430
-Mobile: +91 8905605092 | Email: jssenterprise0411@gmail.com
-GSTIN: 24LRHPS9541P1ZN
+  const text = `*${(header.invoiceTitle || "TAX INVOICE").toUpperCase()} — ${(header.companyName || "JSS ENTERPRISE").toUpperCase()}*
+_${(header.tagline || "PRECISION | POWER | PROGRESS").toUpperCase()}_
+📍 ${header.address}
+📞 Mobile: ${header.phone} | ✉️ Email: ${header.email}
+GSTIN: *${header.gstin}* (State Code: ${header.stateCode})
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 📄 *INVOICE DETAILS*
-• *Invoice No:* ${invoiceInfo.invoiceNo}
+• *Invoice No:* ${invoiceInfo.invoiceNo || "INV-DRAFT"}
 • *Date:* ${invoiceInfo.invoiceDate}
 • *Challan No:* ${invoiceInfo.challanNo || "N/A"}
-• *P.O. No:* ${invoiceInfo.poDateNo || "N/A"}
+• *P.O. Date / No:* ${invoiceInfo.poDateNo || "N/A"}
 • *Place of Supply:* ${invoiceInfo.placeOfSupply}
 
 🏢 *BILLED TO (BUYER)*
 • *Customer:* ${buyerDetails.customerName}
 • *Address:* ${buyerDetails.address}
-• *City/State:* ${buyerDetails.cityState}
-• *GSTIN/PAN:* ${buyerDetails.gstinPan || "N/A"}
+• *City / State:* ${buyerDetails.cityState}
+• *GSTIN / PAN:* ${buyerDetails.gstinPan || "N/A"}
 • *Contact:* ${buyerDetails.contactNo || "N/A"}
 
 📦 *ITEMS & SPECIFICATIONS*
@@ -641,7 +669,8 @@ ${itemLines}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 *PAYMENT SUMMARY*
 • *Sub-Total (Excl. Tax):* ₹${subTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-• *Taxes (CGST + SGST):* ₹${(cgstAmount + sgstAmount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+• *CGST:* ₹${cgstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+• *SGST:* ₹${sgstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}${igstAmount > 0 ? `\n• *IGST:* ₹${igstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : ""}
 • *GRAND TOTAL:* *₹${grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}*
 • *Amount in Words:* _${amountInWords}_
 
@@ -649,49 +678,60 @@ ${itemLines}
 • *Bank:* ${bankDetails.bankName}
 • *A/C Holder:* ${bankDetails.accountHolder}
 • *A/C No:* ${bankDetails.accountNo}
-• *IFSC:* ${bankDetails.ifscCode}
+• *IFSC Code:* ${bankDetails.ifscCode}
 • *Branch:* ${bankDetails.branch}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-_Thank you for doing business with JSS ENTERPRISE!_`;
+_Thank you for doing business with ${header.companyName || "JSS ENTERPRISE"}!_`;
 
   return text;
 }
 
 /**
- * Open WhatsApp directly with formatted invoice text, or native share with PDF
+ * Share invoice with PDF attached (via Web Share API) and full caption details
  */
 export async function shareInvoiceToWhatsApp(
   invoice: Invoice,
   elementId?: string
 ): Promise<void> {
   const text = formatInvoiceForWhatsApp(invoice);
+  const cleanNo = (invoice.invoiceInfo.invoiceNo || invoice.id).replace(/[/\\?%*:|"<>]/g, "-");
 
-  // Try native share with PDF file first if available (e.g. mobile or supported desktop browsers)
-  if (elementId && typeof navigator !== "undefined" && navigator.canShare) {
+  // 1. Try native Web Share API with PDF attached (works on Android, iOS, tablets, and supported browsers)
+  if (typeof navigator !== "undefined" && navigator.canShare) {
     try {
-      const pdfBlob = await generatePDFBlob(elementId);
-      const cleanNo = (invoice.invoiceInfo.invoiceNo || invoice.id).replace(/[/\\?%*:|"<>]/g, "-");
-      const file = new File([pdfBlob], `Invoice-${cleanNo}.pdf`, { type: "application/pdf" });
+      let pdfBlob: Blob | null = null;
+      if (elementId && document.getElementById(elementId)) {
+        pdfBlob = await generatePDFBlob(elementId);
+      }
 
-      if (navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          title: `Invoice ${invoice.invoiceInfo.invoiceNo} - JSS ENTERPRISE`,
-          text: text,
-          files: [file],
-        });
-        return;
+      if (pdfBlob) {
+        const file = new File([pdfBlob], `Invoice-${cleanNo}.pdf`, { type: "application/pdf" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: `Invoice ${invoice.invoiceInfo.invoiceNo} - ${invoice.header?.companyName || "JSS ENTERPRISE"}`,
+            text: text,
+            files: [file],
+          });
+          return;
+        }
       }
     } catch (err: any) {
-      if (err.name !== "AbortError") {
-        console.warn("Native file share fallback to URL:", err);
-      } else {
-        return;
+      if (err.name === "AbortError") {
+        return; // User cancelled share sheet
       }
+      console.warn("Native file share fallback:", err);
     }
   }
 
-  // Direct WhatsApp Web / App link
+  // 2. If element is available, auto-download the PDF so user has it ready
+  if (elementId && document.getElementById(elementId)) {
+    try {
+      await exportToPDF(elementId, `Invoice-${cleanNo}`);
+    } catch {}
+  }
+
+  // 3. Open WhatsApp with complete formatted invoice details
   let phone = invoice.buyerDetails.contactNo.replace(/\D/g, "");
   if (phone.length === 10) {
     phone = "91" + phone;

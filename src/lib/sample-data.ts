@@ -1,9 +1,10 @@
-import { Invoice } from "@/types/invoice";
+import { Invoice, DEFAULT_COMPANY_HEADER } from "@/types/invoice";
 
 export const SAMPLE_INITIAL_INVOICE: Invoice = {
   id: "jss-sample-0142",
   createdAt: "2026-10-17T10:30:00.000Z",
   updatedAt: "2026-10-17T10:30:00.000Z",
+  header: { ...DEFAULT_COMPANY_HEADER },
   invoiceInfo: {
     invoiceNo: "JSS/24-25/0142",
     invoiceDate: "17/10/2026",

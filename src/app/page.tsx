@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { getAllInvoices, fetchInvoices, deleteInvoice, logoutAdmin } from "@/lib/storage";
 import { Invoice } from "@/types/invoice";
@@ -17,10 +17,7 @@ import {
   Calendar,
   Share2,
   FileText,
-  RefreshCw,
   LogOut,
-  Cloud,
-  HardDrive,
   ShieldCheck,
 } from "lucide-react";
 
@@ -28,38 +25,40 @@ export default function DashboardPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [storageInfo, setStorageInfo] = useState<{ isCloud: boolean; name: string } | null>(null);
-  const [syncToast, setSyncToast] = useState<string | null>(null);
+  const isFetchingRef = useRef(false);
 
-  const loadData = useCallback(async (manual = false) => {
-    setIsSyncing(true);
+  // Live real-time fetch from MongoDB
+  const liveSyncFromDB = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
-      const serverData = await fetchInvoices();
-      if (serverData && serverData.length > 0) {
-        setInvoices(serverData);
+      const freshList = await fetchInvoices();
+      if (Array.isArray(freshList)) {
+        setInvoices((prev) => {
+          // Only trigger React re-render if data has actually changed
+          if (
+            prev.length !== freshList.length ||
+            prev.map((i) => `${i.id}-${i.updatedAt}`).join(",") !==
+              freshList.map((i) => `${i.id}-${i.updatedAt}`).join(",")
+          ) {
+            return freshList;
+          }
+          return prev;
+        });
       }
-      if (manual) {
-        setSyncToast("Synced with Cloud Database!");
-        setTimeout(() => setSyncToast(null), 3000);
-      }
-    } catch {
-      if (manual) {
-        setSyncToast("Sync completed (offline data safe)");
-        setTimeout(() => setSyncToast(null), 3000);
-      }
+    } catch (err) {
+      console.warn("Live sync error:", err);
     } finally {
-      setIsSyncing(false);
+      isFetchingRef.current = false;
     }
-  }, []);
+  };
 
   useEffect(() => {
-    // 1. Initial fast render from local cache
+    // 1. Instant optimistic load from local cache
     setInvoices(getAllInvoices());
-    // 2. Fetch from server
-    loadData();
 
-    // 3. Check active storage engine
+    // 2. Fetch active storage status
     fetch("/api/storage/status")
       .then((res) => (res.ok ? res.json() : null))
       .then((info) => {
@@ -67,33 +66,56 @@ export default function DashboardPage() {
       })
       .catch(() => {});
 
-    // 4. Auto re-sync when tab gains focus
-    const handleFocus = () => loadData();
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, [loadData]);
+    // 3. Immediate sync from MongoDB
+    liveSyncFromDB();
+
+    // 4. Automatic LIVE polling every 2.5 seconds (zero refresh required)
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        liveSyncFromDB();
+      }
+    }, 2500);
+
+    // 5. Re-check instantly when window gains focus or tab becomes visible
+    const handleVisibility = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        liveSyncFromDB();
+      }
+    };
+
+    window.addEventListener("focus", handleVisibility);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleVisibility);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   const filtered = invoices.filter(
     (inv) =>
-      inv.invoiceInfo.invoiceNo.toLowerCase().includes(search.toLowerCase()) ||
-      inv.buyerDetails.customerName.toLowerCase().includes(search.toLowerCase()) ||
-      inv.buyerDetails.contactNo.includes(search)
+      inv.invoiceInfo?.invoiceNo?.toLowerCase().includes(search.toLowerCase()) ||
+      inv.buyerDetails?.customerName?.toLowerCase().includes(search.toLowerCase()) ||
+      inv.buyerDetails?.contactNo?.includes(search)
   );
 
-  const totalRevenue = invoices.reduce((sum, inv) => sum + inv.grandTotal, 0);
+  const totalRevenue = invoices.reduce((sum, inv) => sum + (Number(inv.grandTotal) || 0), 0);
   const thisMonth = invoices.filter((inv) => {
-    const d = new Date(inv.createdAt);
+    const d = new Date(inv.createdAt || inv.invoiceInfo?.invoiceDate);
     const now = new Date();
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
 
   async function handleDelete(id: string, invoiceNo: string) {
-    if (confirm(`Are you sure you want to delete invoice ${invoiceNo || id}?`)) {
+    if (confirm(`Are you sure you want to permanently delete invoice ${invoiceNo || id}?`)) {
       setDeletingId(id);
+      // Instant optimistic UI update
+      setInvoices((prev) => prev.filter((inv) => inv.id !== id));
       await deleteInvoice(id);
-      const updated = await fetchInvoices();
-      setInvoices(updated);
       setDeletingId(null);
+      // Immediately pull fresh state
+      liveSyncFromDB();
     }
   }
 
@@ -122,20 +144,8 @@ export default function DashboardPage() {
               </div>
             </Link>
 
-            {/* Right Action Controls: Sync, Create Bill, Admin Logout */}
+            {/* Right Action Controls: Create Bill, Admin Logout */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-              {/* Sync Button */}
-              <button
-                type="button"
-                onClick={() => loadData(true)}
-                disabled={isSyncing}
-                title="Sync across devices"
-                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors disabled:opacity-50"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isSyncing ? "animate-spin text-amber-600" : ""}`} />
-                <span>{isSyncing ? "Syncing..." : "Sync"}</span>
-              </button>
-
               {/* Create Bill Button */}
               <Link
                 href="/invoice/new"
@@ -160,21 +170,19 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* ── STORAGE STATUS SUB-BAR ── */}
+      {/* ── LIVE REAL-TIME STATUS SUB-BAR ── */}
       <div className="bg-slate-100 border-b border-slate-200/60 px-4 py-2">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-slate-600 gap-2">
           <div className="flex items-center gap-2 overflow-hidden truncate">
-            {storageInfo?.isCloud ? (
-              <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">
-                <Cloud className="w-3 h-3 text-emerald-600" />
-                <span>Cloud Synced ({storageInfo.name})</span>
+            {/* Live Pulser Badge */}
+            <span className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-slate-700 bg-white border border-slate-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">
-                <HardDrive className="w-3 h-3 text-slate-500" />
-                <span>Local Server Mode</span>
-              </span>
-            )}
+              <span>Live Synced ({storageInfo?.name || "MongoDB Atlas Cloud"})</span>
+            </span>
+
             <span className="hidden sm:inline text-slate-400">|</span>
             <span className="hidden sm:inline-flex items-center gap-1 text-slate-500 text-[11px]">
               <ShieldCheck className="w-3 h-3 text-amber-500" />
@@ -182,23 +190,11 @@ export default function DashboardPage() {
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => loadData(true)}
-            className="sm:hidden text-slate-600 hover:text-slate-900 inline-flex items-center gap-1 text-[11px] font-semibold"
-          >
-            <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin text-amber-600" : ""}`} />
-            <span>{isSyncing ? "Syncing..." : "Refresh"}</span>
-          </button>
+          <span className="text-[11px] text-slate-400 font-medium">
+            Auto-Updates Real Time across all devices
+          </span>
         </div>
       </div>
-
-      {/* Sync Toast Notification */}
-      {syncToast && (
-        <div className="bg-emerald-600 text-white text-xs font-semibold px-4 py-2 text-center transition-all animate-fade-in shadow-xs flex items-center justify-center gap-2">
-          <span>✓ {syncToast}</span>
-        </div>
-      )}
 
       {/* ── MAIN CONTENT ── */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -253,7 +249,7 @@ export default function DashboardPage() {
           <div className="p-4 sm:p-5 border-b border-slate-200/80 flex flex-col sm:flex-row gap-3.5 items-start sm:items-center justify-between bg-slate-50/50">
             <div>
               <h2 className="text-slate-900 font-bold text-base">Invoices &amp; Bills</h2>
-              <p className="text-slate-500 text-xs">Manage, view, export, and share your bills</p>
+              <p className="text-slate-500 text-xs">Manage, view, export, and share your bills across all devices</p>
             </div>
 
             {/* Search Box */}
@@ -302,21 +298,21 @@ export default function DashboardPage() {
                         href={`/invoice/${inv.id}`}
                         className="font-bold text-amber-600 hover:text-amber-700 text-sm hover:underline"
                       >
-                        {inv.invoiceInfo.invoiceNo || "INV-DRAFT"}
+                        {inv.invoiceInfo?.invoiceNo || "INV-DRAFT"}
                       </Link>
-                      <span className="text-[11px] text-slate-500 font-medium">{inv.invoiceInfo.invoiceDate}</span>
+                      <span className="text-[11px] text-slate-500 font-medium">{inv.invoiceInfo?.invoiceDate}</span>
                     </div>
 
                     <div className="mb-2.5">
-                      <p className="font-semibold text-slate-900 text-xs">{inv.buyerDetails.customerName || "Customer"}</p>
-                      <p className="text-slate-400 text-[11px] truncate">{inv.buyerDetails.cityState || inv.buyerDetails.address}</p>
+                      <p className="font-semibold text-slate-900 text-xs">{inv.buyerDetails?.customerName || "Customer"}</p>
+                      <p className="text-slate-400 text-[11px] truncate">{inv.buyerDetails?.cityState || inv.buyerDetails?.address}</p>
                     </div>
 
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                       <div>
                         <span className="text-[10px] text-slate-400 uppercase tracking-wider block">Total Amount</span>
                         <span className="font-bold text-slate-900 text-sm">
-                          ₹ {inv.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          ₹ {Number(inv.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </span>
                       </div>
 
@@ -332,7 +328,7 @@ export default function DashboardPage() {
                           type="button"
                           onClick={() => shareInvoiceToWhatsApp(inv)}
                           className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors"
-                          title="Share on WhatsApp"
+                          title="Share on WhatsApp with Details"
                         >
                           <Share2 className="w-3.5 h-3.5" />
                         </button>
@@ -345,7 +341,7 @@ export default function DashboardPage() {
                         </Link>
                         <button
                           type="button"
-                          onClick={() => handleDelete(inv.id, inv.invoiceInfo.invoiceNo)}
+                          onClick={() => handleDelete(inv.id, inv.invoiceInfo?.invoiceNo)}
                           className="p-1.5 text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-md transition-colors"
                           title="Delete Bill"
                         >
@@ -383,24 +379,24 @@ export default function DashboardPage() {
                             href={`/invoice/${inv.id}`}
                             className="font-bold text-amber-600 hover:text-amber-700 hover:underline inline-flex items-center gap-1.5"
                           >
-                            <span>{inv.invoiceInfo.invoiceNo || "INV-DRAFT"}</span>
+                            <span>{inv.invoiceInfo?.invoiceNo || "INV-DRAFT"}</span>
                           </Link>
                         </td>
 
                         {/* Customer */}
                         <td className="px-4 py-3.5">
-                          <p className="font-semibold text-slate-900">{inv.buyerDetails.customerName || "Customer"}</p>
-                          <p className="text-slate-400 text-[11px] truncate max-w-xs">{inv.buyerDetails.cityState || inv.buyerDetails.address}</p>
+                          <p className="font-semibold text-slate-900">{inv.buyerDetails?.customerName || "Customer"}</p>
+                          <p className="text-slate-400 text-[11px] truncate max-w-xs">{inv.buyerDetails?.cityState || inv.buyerDetails?.address}</p>
                         </td>
 
                         {/* Date */}
                         <td className="px-4 py-3.5 text-slate-600 font-medium">
-                          {inv.invoiceInfo.invoiceDate}
+                          {inv.invoiceInfo?.invoiceDate}
                         </td>
 
                         {/* Amount */}
                         <td className="px-4 py-3.5 text-right font-bold text-slate-900">
-                          ₹ {inv.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          ₹ {Number(inv.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </td>
 
                         {/* Actions */}
@@ -419,7 +415,7 @@ export default function DashboardPage() {
                             <button
                               onClick={() => shareInvoiceToWhatsApp(inv)}
                               className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
-                              title="Share on WhatsApp"
+                              title="Share on WhatsApp with Details"
                             >
                               <Share2 className="w-4 h-4" />
                             </button>
@@ -435,7 +431,7 @@ export default function DashboardPage() {
 
                             {/* Delete */}
                             <button
-                              onClick={() => handleDelete(inv.id, inv.invoiceInfo.invoiceNo)}
+                              onClick={() => handleDelete(inv.id, inv.invoiceInfo?.invoiceNo)}
                               className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
                               title="Delete Bill"
                             >

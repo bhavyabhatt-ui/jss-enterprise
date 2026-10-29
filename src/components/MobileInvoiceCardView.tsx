@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Invoice } from "@/types/invoice";
+import { Invoice, DEFAULT_COMPANY_HEADER } from "@/types/invoice";
 import {
   Building2,
   Calendar,
@@ -24,6 +24,7 @@ export default function MobileInvoiceCardView({ invoice }: Props) {
   const [copiedBank, setCopiedBank] = useState(false);
   const [copiedInvoiceNo, setCopiedInvoiceNo] = useState(false);
 
+  const header = invoice.header || DEFAULT_COMPANY_HEADER;
   const {
     invoiceInfo,
     buyerDetails,
@@ -43,7 +44,7 @@ export default function MobileInvoiceCardView({ invoice }: Props) {
     num.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const copyBankInfo = () => {
-    const text = `JSS ENTERPRISE - Bank Details\nBank: ${bankDetails.bankName}\nAccount Holder: ${bankDetails.accountHolder}\nA/C No: ${bankDetails.accountNo}\nIFSC: ${bankDetails.ifscCode}\nBranch: ${bankDetails.branch}`;
+    const text = `${header.companyName} - Bank Details\nBank: ${bankDetails.bankName}\nAccount Holder: ${bankDetails.accountHolder}\nA/C No: ${bankDetails.accountNo}\nIFSC: ${bankDetails.ifscCode}\nBranch: ${bankDetails.branch}`;
     navigator.clipboard.writeText(text);
     setCopiedBank(true);
     setTimeout(() => setCopiedBank(false), 2500);
@@ -64,48 +65,48 @@ export default function MobileInvoiceCardView({ invoice }: Props) {
         <div className="flex items-start justify-between gap-2 mb-3">
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xl font-black tracking-wide text-amber-400">JSS ENTERPRISE</span>
+              <span className="text-xl font-black tracking-wide text-amber-400">{header.companyName}</span>
             </div>
-            <p className="text-[10px] font-bold tracking-widest text-slate-300 mt-0.5">
-              PRECISION | POWER | PROGRESS
+            <p className="text-[10px] font-bold tracking-widest text-slate-300 mt-0.5 uppercase">
+              {header.tagline}
             </p>
           </div>
           <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-extrabold bg-amber-400/20 text-amber-300 border border-amber-400/30 uppercase tracking-wide">
-            TAX INVOICE
+            {header.invoiceTitle}
           </span>
         </div>
 
         <p className="text-[11px] text-slate-300 leading-relaxed mb-3">
-          Pushpak (Kathwada) Co-Op Housing Society Ltd., Bhagirath Villa, Kathwada Road, Ahmedabad - 382430, Gujarat
+          {header.address}
         </p>
 
         {/* GSTIN & State Code Badge */}
         <div className="bg-[#242c35] border border-slate-700 rounded-lg p-2.5 mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div>
             <span className="text-[10px] text-slate-400 font-medium block">GSTIN</span>
-            <span className="font-mono font-bold text-amber-400 text-[11px]">24LRHPS9541P1ZN</span>
+            <span className="font-mono font-bold text-amber-400 text-[11px]">{header.gstin}</span>
           </div>
           <div className="text-right">
             <span className="text-[10px] text-slate-400 font-medium block">State Code</span>
-            <span className="font-semibold text-slate-200 text-[11px]">24 (Gujarat)</span>
+            <span className="font-semibold text-slate-200 text-[11px]">{header.stateCode}</span>
           </div>
         </div>
 
         {/* Quick Contact Buttons */}
         <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800 text-[11px]">
           <a
-            href="tel:+918905605092"
+            href={`tel:${header.phone.replace(/\s+/g, "")}`}
             className="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-slate-800/80 hover:bg-slate-750 text-slate-200 border border-slate-700/60 active:scale-98 transition-all"
           >
             <Phone className="w-3.5 h-3.5 text-amber-400" />
-            <span className="font-medium">+91 8905605092</span>
+            <span className="font-medium truncate">{header.phone}</span>
           </a>
           <a
-            href="mailto:jssenterprise0411@gmail.com"
+            href={`mailto:${header.email}`}
             className="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-slate-800/80 hover:bg-slate-750 text-slate-200 border border-slate-700/60 active:scale-98 transition-all truncate"
           >
             <Mail className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="font-medium truncate">Email Us</span>
+            <span className="font-medium truncate">{header.email}</span>
           </a>
         </div>
       </div>

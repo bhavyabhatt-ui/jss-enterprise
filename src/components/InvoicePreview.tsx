@@ -1,13 +1,13 @@
 "use client";
 
-import { Invoice } from "@/types/invoice";
-import { HEADER_IMAGE_BASE64 } from "@/lib/assets";
+import { Invoice, DEFAULT_COMPANY_HEADER } from "@/types/invoice";
 
 interface Props {
   invoice: Invoice;
 }
 
 export default function InvoicePreview({ invoice }: Props) {
+  const header = invoice.header || DEFAULT_COMPANY_HEADER;
   const {
     invoiceInfo,
     buyerDetails,
@@ -38,14 +38,47 @@ export default function InvoicePreview({ invoice }: Props) {
         backgroundColor: "#ffffff",
       }}
     >
-      {/* ── TOP HEADER BANNER ── */}
-      <div className="rounded-xl overflow-hidden mb-3.5 shadow-xs border border-slate-800 bg-[#1e2329]">
-        <img
-          src={HEADER_IMAGE_BASE64}
-          alt="JSS Enterprise Tax Invoice"
-          className="w-full h-auto block object-contain"
-          style={{ width: "800px", maxHeight: "165px" }}
-        />
+      {/* ── TOP HEADER BANNER (DYNAMIC HTML/CSS - ZERO IMAGE BLUR - EDITABLE PER INVOICE) ── */}
+      <div className="rounded-xl overflow-hidden mb-3.5 shadow-xs border border-slate-800 bg-[#1e2329] text-white p-3.5 sm:p-4 flex items-center justify-between gap-3">
+        {/* Left: Logo & Details */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-14 h-14 rounded-lg bg-white/10 p-1 border border-amber-400/40 shrink-0 flex items-center justify-center">
+            <img src="/logo.png" alt="Company Logo" className="w-full h-full object-contain" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="font-extrabold text-[#f59e0b] text-base tracking-wide uppercase leading-tight truncate">
+              {header.companyName || "JSS ENTERPRISE"}
+            </h2>
+            <p className="text-slate-300 text-[10px] tracking-widest font-semibold uppercase mt-0.5 truncate">
+              {header.tagline || "PRECISION | POWER | PROGRESS"}
+            </p>
+            <p className="text-slate-300 text-[11px] mt-1 leading-snug line-clamp-2 max-w-md">
+              {header.address || "Company Address"}
+            </p>
+            <p className="text-[11px] text-slate-300 mt-0.5 flex flex-wrap gap-x-2">
+              <span>
+                <strong className="text-[#f59e0b]">Mobile:</strong> {header.phone || "+91 8905605092"}
+              </span>
+              <span>|</span>
+              <span>
+                <strong className="text-[#f59e0b]">Email:</strong> {header.email || "jssenterprise0411@gmail.com"}
+              </span>
+            </p>
+          </div>
+        </div>
+
+        {/* Right: Invoice Title & GSTIN */}
+        <div className="border-l border-slate-700/80 pl-4 shrink-0 flex flex-col items-end">
+          <h1 className="font-black text-[#f59e0b] text-xl tracking-wider uppercase leading-none">
+            {header.invoiceTitle || "TAX INVOICE"}
+          </h1>
+          <div className="mt-2 px-3 py-1 rounded-md border border-[#f59e0b] bg-black/40 text-[11px] font-mono text-white font-bold tracking-wider">
+            GSTIN: {header.gstin || "24LRHPS9541P1ZN"}
+          </div>
+          <span className="text-[10px] text-slate-400 font-medium mt-1">
+            State Code: {header.stateCode || "24 (Gujarat)"}
+          </span>
+        </div>
       </div>
 
       {/* ── INVOICE INFO & BUYER DETAILS (STRICT 2 COLUMNS ON ALL DEVICES) ── */}
