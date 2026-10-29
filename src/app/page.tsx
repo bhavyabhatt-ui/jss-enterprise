@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { getAllInvoices, fetchInvoices, deleteInvoice } from "@/lib/storage";
+import { getAllInvoices, fetchInvoices, deleteInvoice, logoutAdmin } from "@/lib/storage";
 import { Invoice } from "@/types/invoice";
 import { shareInvoiceToWhatsApp } from "@/lib/export";
 import {
@@ -17,23 +17,51 @@ import {
   Calendar,
   Share2,
   FileText,
+  RefreshCw,
+  LogOut,
+  Cloud,
+  HardDrive,
+  ShieldCheck,
 } from "lucide-react";
 
 export default function DashboardPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [storageInfo, setStorageInfo] = useState<{ isCloud: boolean; name: string } | null>(null);
+
+  const loadData = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      const serverData = await fetchInvoices();
+      if (serverData) {
+        setInvoices(serverData);
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
 
   useEffect(() => {
     // 1. Initial fast render from local cache
     setInvoices(getAllInvoices());
-    // 2. Cross-device sync with Server API
-    fetchInvoices().then((serverData) => {
-      if (serverData && serverData.length > 0) {
-        setInvoices(serverData);
-      }
-    });
-  }, []);
+    // 2. Fetch from server
+    loadData();
+
+    // 3. Check active storage engine
+    fetch("/api/storage/status")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((info) => {
+        if (info) setStorageInfo(info);
+      })
+      .catch(() => {});
+
+    // 4. Auto re-sync when tab gains focus
+    const handleFocus = () => loadData();
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [loadData]);
 
   const filtered = invoices.filter(
     (inv) =>
@@ -84,8 +112,21 @@ export default function DashboardPage() {
               </div>
             </Link>
 
-            {/* Action Button: Never wraps */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* Right Action Controls: Sync, Create Bill, Admin Logout */}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              {/* Sync Button */}
+              <button
+                type="button"
+                onClick={() => loadData()}
+                disabled={isSyncing}
+                title="Sync across devices"
+                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-slate-600 ${isSyncing ? "animate-spin text-amber-600" : ""}`} />
+                <span>{isSyncing ? "Syncing..." : "Sync"}</span>
+              </button>
+
+              {/* Create Bill Button */}
               <Link
                 href="/invoice/new"
                 className="inline-flex items-center gap-1.5 sm:gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm transition-all shadow-sm shadow-amber-500/20 active:scale-98 whitespace-nowrap shrink-0"
@@ -93,10 +134,54 @@ export default function DashboardPage() {
                 <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                 <span className="whitespace-nowrap">Create Bill</span>
               </Link>
+
+              {/* Admin Logout */}
+              <button
+                type="button"
+                onClick={() => logoutAdmin()}
+                title="Sign out of Admin"
+                className="inline-flex items-center gap-1 text-slate-500 hover:text-rose-600 hover:bg-rose-50 p-2 rounded-lg transition-colors border border-transparent hover:border-rose-200 shrink-0"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden md:inline text-xs font-semibold">Logout</span>
+              </button>
             </div>
           </div>
         </div>
       </header>
+
+      {/* ── STORAGE STATUS SUB-BAR ── */}
+      <div className="bg-slate-100 border-b border-slate-200/60 px-4 py-2">
+        <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-slate-600 gap-2">
+          <div className="flex items-center gap-2 overflow-hidden truncate">
+            {storageInfo?.isCloud ? (
+              <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">
+                <Cloud className="w-3 h-3 text-emerald-600" />
+                <span>Cloud Synced ({storageInfo.name})</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-slate-700 bg-white border border-slate-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">
+                <HardDrive className="w-3 h-3 text-slate-500" />
+                <span>Local Server Mode</span>
+              </span>
+            )}
+            <span className="hidden sm:inline text-slate-400">|</span>
+            <span className="hidden sm:inline-flex items-center gap-1 text-slate-500 text-[11px]">
+              <ShieldCheck className="w-3 h-3 text-amber-500" />
+              <span>Admin: <strong>adminjss</strong></span>
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => loadData()}
+            className="sm:hidden text-slate-600 hover:text-slate-900 inline-flex items-center gap-1 text-[11px] font-semibold"
+          >
+            <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin text-amber-600" : ""}`} />
+            <span>{isSyncing ? "Syncing..." : "Refresh"}</span>
+          </button>
+        </div>
+      </div>
 
       {/* ── MAIN CONTENT ── */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

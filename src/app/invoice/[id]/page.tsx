@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getInvoiceById, fetchInvoiceById } from "@/lib/storage";
+import { getInvoiceById, fetchInvoiceById, logoutAdmin } from "@/lib/storage";
 import { exportToPDF, exportToImage, exportToWord, shareInvoiceToWhatsApp, printInvoice } from "@/lib/export";
 import { Invoice } from "@/types/invoice";
 import ResponsiveInvoiceViewer from "@/components/ResponsiveInvoiceViewer";
@@ -17,6 +17,7 @@ import {
   Loader2,
   Check,
   Share2,
+  LogOut,
 } from "lucide-react";
 
 type ExportType = "pdf" | "image" | "word" | "whatsapp" | "print" | null;
@@ -326,6 +327,16 @@ export default function InvoiceViewPage() {
                 <Edit className="w-3.5 h-3.5" />
                 <span>Edit</span>
               </Link>
+
+              {/* Logout */}
+              <button
+                type="button"
+                onClick={() => logoutAdmin()}
+                title="Sign out of Admin"
+                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors ml-1"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>

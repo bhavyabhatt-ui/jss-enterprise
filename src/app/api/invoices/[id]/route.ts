@@ -9,7 +9,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const invoice = getServerInvoiceById(id);
+    const invoice = await getServerInvoiceById(id);
     if (!invoice) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
@@ -25,7 +25,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const deleted = deleteServerInvoice(id);
+    const deleted = await deleteServerInvoice(id);
     return NextResponse.json({ success: deleted });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -39,10 +39,9 @@ export async function PUT(
   try {
     const body = await request.json();
     const { id } = await params;
-    const saved = saveServerInvoice({ ...body, id });
+    const saved = await saveServerInvoice({ ...body, id });
     return NextResponse.json(saved);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-

@@ -33,7 +33,7 @@ export async function fetchInvoices(): Promise<Invoice[]> {
     const res = await fetch("/api/invoices", { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         const deduped = deduplicateInvoices(data);
         if (typeof window !== "undefined") {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped));
@@ -116,6 +116,17 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
     });
     if (res.ok) {
       const saved = await res.json();
+      // Ensure local cache has the confirmed server state
+      if (typeof window !== "undefined") {
+        const local = getAllInvoices();
+        const idx = local.findIndex((inv) => inv.id === saved.id);
+        if (idx >= 0) {
+          local[idx] = saved;
+        } else {
+          local.unshift(saved);
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(deduplicateInvoices(local)));
+      }
       return saved;
     }
   } catch (err) {
@@ -155,8 +166,7 @@ export function getAllInvoices(): Invoice[] {
     }
     const parsed = JSON.parse(data);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      const deduped = deduplicateInvoices(parsed);
-      return deduped;
+      return deduplicateInvoices(parsed);
     }
     return [SAMPLE_INITIAL_INVOICE];
   } catch {
@@ -167,6 +177,20 @@ export function getAllInvoices(): Invoice[] {
 export function getInvoiceById(id: string): Invoice | null {
   const invoices = getAllInvoices();
   return invoices.find((inv) => inv.id === id) || null;
+}
+
+/**
+ * Log out current admin session
+ */
+export async function logoutAdmin(): Promise<void> {
+  try {
+    await fetch("/api/auth/logout", { method: "POST" });
+  } catch (err) {
+    console.error("Logout request failed:", err);
+  }
+  if (typeof window !== "undefined") {
+    window.location.href = "/login";
+  }
 }
 
 export function numberToWords(amount: number): string {

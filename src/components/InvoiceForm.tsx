@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import { Invoice, InvoiceItem, Step } from "@/types/invoice";
-import { saveInvoice, numberToWords } from "@/lib/storage";
+import { saveInvoice, numberToWords, logoutAdmin } from "@/lib/storage";
 
 // Step Components
 import StepIndicator from "@/components/StepIndicator";
@@ -13,7 +13,7 @@ import Step2BuyerDetails from "@/components/steps/Step2BuyerDetails";
 import Step3Items from "@/components/steps/Step3Items";
 import Step4BankDetails from "@/components/steps/Step4BankDetails";
 import Step5Summary from "@/components/steps/Step5Summary";
-import { ArrowLeft, ArrowRight, Save } from "lucide-react";
+import { ArrowLeft, ArrowRight, Save, LogOut } from "lucide-react";
 
 const defaultInvoice: Omit<Invoice, "id" | "createdAt" | "updatedAt"> = {
   invoiceInfo: {
@@ -181,8 +181,18 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
             {mode === "new" ? "Create Tax Invoice" : "Edit Tax Invoice"}
           </h2>
 
-          <div className="text-slate-500 text-xs font-semibold bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-            Step {step} of 5
+          <div className="flex items-center gap-2">
+            <div className="text-slate-500 text-xs font-semibold bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+              Step {step} of 5
+            </div>
+            <button
+              type="button"
+              onClick={() => logoutAdmin()}
+              title="Sign out of Admin"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-200"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </header>
