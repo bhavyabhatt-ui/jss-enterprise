@@ -7,6 +7,23 @@ import { MongoClient, Db } from "mongodb";
 
 export { SAMPLE_INITIAL_INVOICE };
 
+// Ensure Node DNS resolves Atlas SRV records reliably
+if (typeof process !== "undefined") {
+  try {
+    const dns = require("dns");
+    if (dns && typeof dns.setServers === "function") {
+      dns.setServers(["8.8.8.8", "1.1.1.1"]);
+    }
+  } catch {}
+}
+
+const DEFAULT_MONGODB_URI =
+  "mongodb+srv://bhattbhavya11_db_user:kfLukyPmsIfRkR7i@jss.yd5r8se.mongodb.net/?retryWrites=true&w=majority";
+
+function getMongoUri(): string {
+  return (process.env.MONGODB_URI || DEFAULT_MONGODB_URI).trim();
+}
+
 // Global in-memory cache to persist across warm serverless requests
 declare global {
   var __JSS_INVOICES_CACHE__: Invoice[] | undefined;
@@ -37,7 +54,8 @@ export function getActiveStorageProvider(): {
     };
   }
 
-  if (process.env.MONGODB_URI) {
+  const mongoUri = getMongoUri();
+  if (mongoUri) {
     return {
       type: "mongodb",
       isCloud: true,
@@ -78,12 +96,15 @@ function getUpstashRedisClient(): Redis | null {
  * ========================================================================= */
 
 async function getMongoDB(): Promise<Db | null> {
-  const uri = process.env.MONGODB_URI;
+  const uri = getMongoUri();
   if (!uri) return null;
 
   try {
     if (!globalThis.__JSS_MONGO_CLIENT__) {
-      globalThis.__JSS_MONGO_CLIENT__ = new MongoClient(uri.trim());
+      globalThis.__JSS_MONGO_CLIENT__ = new MongoClient(uri, {
+        serverSelectionTimeoutMS: 8000,
+        connectTimeoutMS: 10000,
+      });
       await globalThis.__JSS_MONGO_CLIENT__.connect();
     }
     return globalThis.__JSS_MONGO_CLIENT__.db("jss_enterprise");

@@ -2,6 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Lock, User, Eye, EyeOff, ShieldCheck, ArrowRight, AlertCircle, Loader2 } from "lucide-react";
 
 function LoginForm() {
@@ -9,7 +10,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const from = searchParams.get("from") || "/";
 
-  const [username, setUsername] = useState("adminjss");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -18,13 +19,19 @@ function LoginForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!username.trim() || !password.trim()) {
+      setError("Please enter both username and password.");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: username.trim(), password: password.trim() }),
       });
 
       const data = await res.json();
@@ -39,43 +46,39 @@ function LoginForm() {
       router.push(from);
       router.refresh();
     } catch (err: any) {
-      setError("Network or server error during sign-in. Please try again.");
+      setError("Connection error during sign-in. Please try again.");
       setLoading(false);
     }
   }
 
   return (
     <div className="w-full max-w-md">
-      {/* Brand Card */}
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 overflow-hidden">
-        {/* Top Header Banner */}
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-[#1e293b] p-6 text-center text-white relative">
-          <div className="w-16 h-16 mx-auto mb-3 rounded-xl bg-white p-1.5 shadow-md border border-slate-700/50 flex items-center justify-center">
+      {/* Brand Card matching overall system UI */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
+        {/* Card Header */}
+        <div className="p-6 sm:p-8 border-b border-slate-100 bg-slate-50/50 text-center">
+          <div className="w-14 h-14 mx-auto mb-3 rounded-xl border border-slate-200 bg-white p-1 shadow-xs flex items-center justify-center">
             <img src="/logo.png" alt="JSS Enterprise Logo" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-xl font-extrabold tracking-wide uppercase text-white">
+          <h1 className="font-extrabold text-slate-900 text-lg tracking-wide leading-none uppercase">
             JSS ENTERPRISE
           </h1>
-          <p className="text-[11px] text-amber-400 font-semibold tracking-widest uppercase mt-0.5">
+          <p className="text-slate-400 text-[10px] tracking-wider font-semibold uppercase mt-1">
             Precision | Power | Progress
           </p>
-          <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700 text-xs text-slate-300">
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-            <span>Admin Authentication</span>
-          </div>
         </div>
 
         {/* Form Body */}
         <div className="p-6 sm:p-8">
           <div className="mb-6 text-center">
-            <h2 className="text-lg font-bold text-slate-900">Sign in to InvoiceIQ</h2>
+            <h2 className="text-base sm:text-lg font-bold text-slate-900">Admin Sign In</h2>
             <p className="text-xs text-slate-500 mt-1">
-              Protected portal for billing, invoicing &amp; financial records
+              Enter your credentials to access the billing portal
             </p>
           </div>
 
           {error && (
-            <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2.5">
+            <div className="mb-5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2.5">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
@@ -84,7 +87,7 @@ function LoginForm() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                Admin Username
+                Username
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -93,17 +96,18 @@ function LoginForm() {
                 <input
                   type="text"
                   required
+                  autoFocus
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter admin username"
-                  className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all font-medium"
+                  placeholder="Enter username"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-medium"
                 />
               </div>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                Admin Password
+                Password
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -114,8 +118,8 @@ function LoginForm() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter admin password"
-                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-500/20 transition-all font-medium"
+                  placeholder="Enter password"
+                  className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-medium"
                 />
                 <button
                   type="button"
@@ -131,7 +135,7 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold text-sm rounded-xl shadow-md shadow-amber-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer active:scale-98"
+              className="w-full mt-2 py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs sm:text-sm rounded-xl shadow-sm shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer active:scale-98"
             >
               {loading ? (
                 <>
@@ -140,29 +144,19 @@ function LoginForm() {
                 </>
               ) : (
                 <>
-                  <span>Sign In as Admin</span>
+                  <span>Sign In</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
+        </div>
 
-          {/* Default Credentials Hint Box */}
-          <div className="mt-6 pt-5 border-t border-slate-100 text-center">
-            <div className="inline-block p-3 rounded-xl bg-amber-50/60 border border-amber-200/60 text-left w-full">
-              <p className="text-[11px] font-semibold text-amber-900 mb-1 flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                <span>Default Admin Credentials:</span>
-              </p>
-              <div className="text-[11px] font-mono text-slate-700 bg-white/80 p-2 rounded-lg border border-amber-100 flex justify-between items-center">
-                <span>User: <strong className="text-slate-900">adminjss</strong></span>
-                <span>Pass: <strong className="text-slate-900">jss2026</strong></span>
-              </div>
-              <p className="text-[10px] text-slate-500 mt-1.5">
-                * You can also configure <code className="bg-amber-100/50 px-1 rounded">ADMIN_USERNAME</code> and <code className="bg-amber-100/50 px-1 rounded">ADMIN_PASSWORD</code> in your Vercel Environment Variables.
-              </p>
-            </div>
-          </div>
+        {/* Card Footer */}
+        <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 text-center">
+          <p className="text-[11px] text-slate-400 font-medium">
+            JSS Enterprise Billing Portal &bull; Precision &bull; Power &bull; Progress
+          </p>
         </div>
       </div>
     </div>
@@ -171,10 +165,44 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
-      <Suspense fallback={<div className="text-white text-sm">Loading admin portal...</div>}>
-        <LoginForm />
-      </Suspense>
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col justify-between">
+      {/* ── TOP NAVIGATION ── */}
+      <header className="bg-white border-b border-slate-200/80 sticky top-0 z-50 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg overflow-hidden border border-slate-200 bg-white p-0.5 shadow-xs group-hover:border-amber-400 transition-colors">
+                <img src="/logo.png" alt="JSS Enterprise Logo" className="w-full h-full object-contain" />
+              </div>
+              <div>
+                <h1 className="font-extrabold text-slate-900 text-sm sm:text-base tracking-wide leading-none group-hover:text-amber-600 transition-colors">
+                  JSS ENTERPRISE
+                </h1>
+                <p className="text-slate-400 text-[9px] sm:text-[10px] tracking-wider font-semibold mt-0.5 uppercase">
+                  Precision | Power | Progress
+                </p>
+              </div>
+            </Link>
+
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold">
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
+              <span>Admin Portal</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* ── CENTER LOGIN FORM ── */}
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
+        <Suspense fallback={<div className="text-slate-500 text-xs">Loading admin portal...</div>}>
+          <LoginForm />
+        </Suspense>
+      </main>
+
+      {/* ── BOTTOM FOOTER ── */}
+      <footer className="py-4 text-center text-xs text-slate-400 border-t border-slate-200 bg-white">
+        &copy; {new Date().getFullYear()} JSS Enterprise. All rights reserved.
+      </footer>
     </div>
   );
 }

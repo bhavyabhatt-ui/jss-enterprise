@@ -17,3 +17,4 @@ export async function GET(req: NextRequest) {
     user: result.username || "adminjss",
   });
 }
+
