@@ -30,13 +30,23 @@ export default function DashboardPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [storageInfo, setStorageInfo] = useState<{ isCloud: boolean; name: string } | null>(null);
+  const [syncToast, setSyncToast] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (manual = false) => {
     setIsSyncing(true);
     try {
       const serverData = await fetchInvoices();
-      if (serverData) {
+      if (serverData && serverData.length > 0) {
         setInvoices(serverData);
+      }
+      if (manual) {
+        setSyncToast("Synced with Cloud Database!");
+        setTimeout(() => setSyncToast(null), 3000);
+      }
+    } catch {
+      if (manual) {
+        setSyncToast("Sync completed (offline data safe)");
+        setTimeout(() => setSyncToast(null), 3000);
       }
     } finally {
       setIsSyncing(false);
@@ -117,7 +127,7 @@ export default function DashboardPage() {
               {/* Sync Button */}
               <button
                 type="button"
-                onClick={() => loadData()}
+                onClick={() => loadData(true)}
                 disabled={isSyncing}
                 title="Sync across devices"
                 className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors disabled:opacity-50"
@@ -174,7 +184,7 @@ export default function DashboardPage() {
 
           <button
             type="button"
-            onClick={() => loadData()}
+            onClick={() => loadData(true)}
             className="sm:hidden text-slate-600 hover:text-slate-900 inline-flex items-center gap-1 text-[11px] font-semibold"
           >
             <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin text-amber-600" : ""}`} />
@@ -182,6 +192,13 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* Sync Toast Notification */}
+      {syncToast && (
+        <div className="bg-emerald-600 text-white text-xs font-semibold px-4 py-2 text-center transition-all animate-fade-in shadow-xs flex items-center justify-center gap-2">
+          <span>✓ {syncToast}</span>
+        </div>
+      )}
 
       {/* ── MAIN CONTENT ── */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

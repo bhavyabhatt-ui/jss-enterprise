@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import dns from "dns";
 import { Invoice } from "@/types/invoice";
 import { SAMPLE_INITIAL_INVOICE } from "@/lib/sample-data";
 import { Redis } from "@upstash/redis";
@@ -7,14 +8,13 @@ import { MongoClient, Db } from "mongodb";
 
 export { SAMPLE_INITIAL_INVOICE };
 
-// Ensure Node DNS resolves Atlas SRV records reliably
-if (typeof process !== "undefined") {
-  try {
-    const dns = require("dns");
-    if (dns && typeof dns.setServers === "function") {
-      dns.setServers(["8.8.8.8", "1.1.1.1"]);
-    }
-  } catch {}
+// Ensure Node DNS resolves Atlas SRV records reliably across all OS/ISP resolvers
+try {
+  if (typeof dns.setServers === "function") {
+    dns.setServers(["8.8.8.8", "1.1.1.1"]);
+  }
+} catch (err) {
+  // Ignore in environments where setServers is restricted
 }
 
 const DEFAULT_MONGODB_URI =
@@ -24,7 +24,7 @@ function getMongoUri(): string {
   return (process.env.MONGODB_URI || DEFAULT_MONGODB_URI).trim();
 }
 
-// Global in-memory cache to persist across warm serverless requests
+// Global cache to persist connections across warm serverless requests
 declare global {
   var __JSS_INVOICES_CACHE__: Invoice[] | undefined;
   var __JSS_MONGO_CLIENT__: MongoClient | undefined;
@@ -102,8 +102,8 @@ async function getMongoDB(): Promise<Db | null> {
   try {
     if (!globalThis.__JSS_MONGO_CLIENT__) {
       globalThis.__JSS_MONGO_CLIENT__ = new MongoClient(uri, {
-        serverSelectionTimeoutMS: 8000,
-        connectTimeoutMS: 10000,
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 8000,
       });
       await globalThis.__JSS_MONGO_CLIENT__.connect();
     }
@@ -166,7 +166,7 @@ function writeToFile(invoices: Invoice[]): void {
  * 5. DEDUPLICATION HELPER
  * ========================================================================= */
 
-function deduplicateList(invoices: Invoice[]): Invoice[] {
+export function deduplicateList(invoices: Invoice[]): Invoice[] {
   const seenIds = new Set<string>();
   const seenNos = new Set<string>();
   const result: Invoice[] = [];
@@ -210,13 +210,12 @@ export async function getServerInvoices(): Promise<Invoice[]> {
           globalThis.__JSS_INVOICES_CACHE__ = deduped;
           return deduped;
         }
-        // If empty in cloud, initialize with sample
         await redis.set(REDIS_KEY, [SAMPLE_INITIAL_INVOICE]);
         globalThis.__JSS_INVOICES_CACHE__ = [SAMPLE_INITIAL_INVOICE];
         return [SAMPLE_INITIAL_INVOICE];
       }
     } catch (err) {
-      console.error("Upstash Redis read error, falling back to cache/file:", err);
+      console.error("Upstash Redis read error:", err);
     }
   }
 
@@ -227,22 +226,22 @@ export async function getServerInvoices(): Promise<Invoice[]> {
       if (db) {
         const docs = await db
           .collection("invoices")
-          .find({})
+          .find({}, { projection: { _id: 0 } })
           .sort({ updatedAt: -1 })
           .toArray();
 
         if (docs && docs.length > 0) {
-          const mapped: Invoice[] = docs.map((doc: any) => {
-            const { _id, ...rest } = doc;
-            return rest as Invoice;
-          });
-          const deduped = deduplicateList(mapped);
+          const deduped = deduplicateList(docs as unknown as Invoice[]);
           globalThis.__JSS_INVOICES_CACHE__ = deduped;
           return deduped;
         }
 
-        // Initialize with sample
-        await db.collection("invoices").insertOne({ ...SAMPLE_INITIAL_INVOICE });
+        // Initialize with sample if completely empty
+        await db.collection("invoices").updateOne(
+          { id: SAMPLE_INITIAL_INVOICE.id },
+          { $set: SAMPLE_INITIAL_INVOICE },
+          { upsert: true }
+        );
         globalThis.__JSS_INVOICES_CACHE__ = [SAMPLE_INITIAL_INVOICE];
         return [SAMPLE_INITIAL_INVOICE];
       }
@@ -262,99 +261,188 @@ export async function getServerInvoices(): Promise<Invoice[]> {
 }
 
 /**
- * Save / Replace entire list in active storage
+ * Get single invoice by ID
  */
-export async function saveServerInvoices(invoices: Invoice[]): Promise<void> {
-  const deduped = deduplicateList(invoices);
-  globalThis.__JSS_INVOICES_CACHE__ = deduped;
+export async function getServerInvoiceById(id: string): Promise<Invoice | null> {
   const provider = getActiveStorageProvider();
 
-  // A. UPSTASH REDIS / VERCEL KV
-  if (provider.type === "upstash") {
-    try {
-      const redis = getUpstashRedisClient();
-      if (redis) {
-        await redis.set(REDIS_KEY, deduped);
-        return;
-      }
-    } catch (err) {
-      console.error("Upstash Redis write error:", err);
-    }
-  }
-
-  // B. MONGODB ATLAS
   if (provider.type === "mongodb") {
     try {
       const db = await getMongoDB();
       if (db) {
-        const col = db.collection("invoices");
-        // Clear and replace with deduped array
-        await col.deleteMany({});
-        if (deduped.length > 0) {
-          await col.insertMany(deduped.map((inv) => ({ ...inv })));
-        }
-        return;
+        const doc = await db
+          .collection("invoices")
+          .findOne({ id }, { projection: { _id: 0 } });
+        if (doc) return doc as unknown as Invoice;
       }
     } catch (err) {
-      console.error("MongoDB Atlas write error:", err);
+      console.error("MongoDB findOne error:", err);
     }
   }
 
-  // C. LOCAL FILE
-  writeToFile(deduped);
-}
-
-/**
- * Get single invoice by ID
- */
-export async function getServerInvoiceById(id: string): Promise<Invoice | null> {
   const list = await getServerInvoices();
   return list.find((item) => item.id === id) || null;
 }
 
 /**
- * Create or update single invoice
+ * Create or update single invoice atomically
  */
 export async function saveServerInvoice(invoice: Invoice): Promise<Invoice> {
-  const list = await getServerInvoices();
-  const invNo = invoice.invoiceInfo?.invoiceNo?.trim().toLowerCase();
+  const provider = getActiveStorageProvider();
+  const updatedInvoice: Invoice = {
+    ...invoice,
+    updatedAt: new Date().toISOString(),
+  };
 
+  // 1. MONGODB ATLAS ATOMIC UPSERT
+  if (provider.type === "mongodb") {
+    try {
+      const db = await getMongoDB();
+      if (db) {
+        const col = db.collection("invoices");
+        // Remove _id from object if present so Mongo doesn't complain on update
+        const { _id, ...cleanDoc }: any = updatedInvoice;
+        await col.updateOne(
+          { id: cleanDoc.id },
+          { $set: cleanDoc },
+          { upsert: true }
+        );
+      }
+    } catch (err) {
+      console.error("MongoDB Atlas atomic save error:", err);
+    }
+  }
+
+  // 2. Also keep cache and fallback file synchronized
+  const list = await getServerInvoices();
+  const invNo = updatedInvoice.invoiceInfo?.invoiceNo?.trim().toLowerCase();
   const existingIdx = list.findIndex(
     (item) =>
-      item.id === invoice.id ||
+      item.id === updatedInvoice.id ||
       (invNo && item.invoiceInfo?.invoiceNo?.trim().toLowerCase() === invNo)
   );
 
-  let updatedInvoice: Invoice;
-
   if (existingIdx >= 0) {
-    updatedInvoice = {
-      ...invoice,
-      id: list[existingIdx].id,
-      updatedAt: new Date().toISOString(),
-    };
     list[existingIdx] = updatedInvoice;
   } else {
-    updatedInvoice = {
-      ...invoice,
-      updatedAt: new Date().toISOString(),
-    };
     list.unshift(updatedInvoice);
   }
 
-  await saveServerInvoices(list);
+  const deduped = deduplicateList(list);
+  globalThis.__JSS_INVOICES_CACHE__ = deduped;
+
+  if (provider.type === "upstash") {
+    try {
+      const redis = getUpstashRedisClient();
+      if (redis) await redis.set(REDIS_KEY, deduped);
+    } catch (err) {
+      console.error("Upstash Redis write error:", err);
+    }
+  }
+
+  writeToFile(deduped);
   return updatedInvoice;
 }
 
 /**
- * Delete single invoice by ID
+ * Delete single invoice by ID atomically
  */
 export async function deleteServerInvoice(id: string): Promise<boolean> {
+  const provider = getActiveStorageProvider();
+
+  // 1. MONGODB ATLAS ATOMIC DELETE
+  if (provider.type === "mongodb") {
+    try {
+      const db = await getMongoDB();
+      if (db) {
+        await db.collection("invoices").deleteOne({ id });
+      }
+    } catch (err) {
+      console.error("MongoDB Atlas delete error:", err);
+    }
+  }
+
+  // 2. Update cache and fallback file
   const list = await getServerInvoices();
   const filtered = list.filter((item) => item.id !== id);
-  if (filtered.length !== list.length) {
-    await saveServerInvoices(filtered);
-    return true;
+  globalThis.__JSS_INVOICES_CACHE__ = filtered;
+
+  if (provider.type === "upstash") {
+    try {
+      const redis = getUpstashRedisClient();
+      if (redis) await redis.set(REDIS_KEY, filtered);
+    } catch (err) {}
   }
-  return false;
+
+  writeToFile(filtered);
+  return true;
+}
+
+/**
+ * Bidirectional Synchronize: Merges client list with server/database list.
+ * Any invoice that exists on client but not in MongoDB is added to MongoDB!
+ * Any invoice that exists in MongoDB is preserved.
+ * Returns the unified combined list.
+ */
+export async function syncInvoicesWithCloud(clientInvoices: Invoice[]): Promise<Invoice[]> {
+  const provider = getActiveStorageProvider();
+  const serverList = await getServerInvoices();
+
+  // Map server invoices by ID
+  const map = new Map<string, Invoice>();
+  for (const s of serverList) {
+    if (s && s.id) map.set(s.id, s);
+  }
+
+  const missingOnServer: Invoice[] = [];
+
+  // Compare client invoices
+  if (Array.isArray(clientInvoices)) {
+    for (const c of clientInvoices) {
+      if (!c || !c.id) continue;
+      const existing = map.get(c.id);
+      if (!existing) {
+        // Exists on client, missing on server!
+        map.set(c.id, c);
+        missingOnServer.push(c);
+      } else {
+        // Compare updatedAt timestamp
+        const cTime = new Date(c.updatedAt || c.createdAt || 0).getTime();
+        const sTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
+        if (cTime > sTime) {
+          map.set(c.id, c);
+          missingOnServer.push(c);
+        }
+      }
+    }
+  }
+
+  // Persist missing items to MongoDB
+  if (missingOnServer.length > 0 && provider.type === "mongodb") {
+    try {
+      const db = await getMongoDB();
+      if (db) {
+        const col = db.collection("invoices");
+        for (const inv of missingOnServer) {
+          const { _id, ...clean }: any = inv;
+          await col.updateOne({ id: clean.id }, { $set: clean }, { upsert: true });
+        }
+      }
+    } catch (err) {
+      console.error("Error pushing client invoices to MongoDB Atlas during sync:", err);
+    }
+  }
+
+  const merged = deduplicateList(Array.from(map.values()));
+  globalThis.__JSS_INVOICES_CACHE__ = merged;
+
+  if (provider.type === "upstash") {
+    try {
+      const redis = getUpstashRedisClient();
+      if (redis) await redis.set(REDIS_KEY, merged);
+    } catch {}
+  }
+
+  writeToFile(merged);
+  return merged;
 }

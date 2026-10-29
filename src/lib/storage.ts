@@ -5,7 +5,7 @@ const STORAGE_KEY = "jss_enterprise_invoices";
 
 export { SAMPLE_INITIAL_INVOICE };
 
-function deduplicateInvoices(invoices: Invoice[]): Invoice[] {
+export function deduplicateInvoices(invoices: Invoice[]): Invoice[] {
   const seenIds = new Set<string>();
   const seenNos = new Set<string>();
   const result: Invoice[] = [];
@@ -26,15 +26,27 @@ function deduplicateInvoices(invoices: Invoice[]): Invoice[] {
 }
 
 /**
- * Fetch all invoices from Server API, fallback to localStorage
+ * Fetch and bidirectionally sync invoices with the cloud database.
+ * Never destroys local data if the server is offline or empty.
  */
 export async function fetchInvoices(): Promise<Invoice[]> {
+  const localList = getAllInvoices();
+
   try {
-    const res = await fetch("/api/invoices", { cache: "no-store" });
+    // Bidirectional sync: send local invoices so server can merge any unsynced bills
+    const res = await fetch("/api/invoices/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invoices: localList }),
+      cache: "no-store",
+    });
+
     if (res.ok) {
       const data = await res.json();
-      if (Array.isArray(data)) {
-        const deduped = deduplicateInvoices(data);
+      const serverInvoices = data.invoices || data;
+
+      if (Array.isArray(serverInvoices) && serverInvoices.length > 0) {
+        const deduped = deduplicateInvoices(serverInvoices);
         if (typeof window !== "undefined") {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped));
         }
@@ -42,10 +54,10 @@ export async function fetchInvoices(): Promise<Invoice[]> {
       }
     }
   } catch (err) {
-    console.warn("Server API fetch failed, using local cache:", err);
+    console.warn("Cloud sync request failed, preserving local data safely:", err);
   }
 
-  return getAllInvoices();
+  return localList;
 }
 
 /**
@@ -84,7 +96,7 @@ export async function fetchInvoiceById(id: string): Promise<Invoice | null> {
 export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
   const invNo = invoice.invoiceInfo?.invoiceNo?.trim().toLowerCase();
 
-  // 1. Immediately update localStorage
+  // 1. Immediately update localStorage for instant optimistic UI
   if (typeof window !== "undefined") {
     const invoices = getAllInvoices();
     const existingIndex = invoices.findIndex(
@@ -107,30 +119,34 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped));
   }
 
-  // 2. Persist to Server Database / API
+  // 2. Persist to MongoDB Atlas Server Database
   try {
     const res = await fetch("/api/invoices", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(invoice),
     });
+
     if (res.ok) {
       const saved = await res.json();
-      // Ensure local cache has the confirmed server state
-      if (typeof window !== "undefined") {
-        const local = getAllInvoices();
-        const idx = local.findIndex((inv) => inv.id === saved.id);
-        if (idx >= 0) {
-          local[idx] = saved;
-        } else {
-          local.unshift(saved);
+      if (saved && saved.id) {
+        if (typeof window !== "undefined") {
+          const local = getAllInvoices();
+          const idx = local.findIndex((inv) => inv.id === saved.id);
+          if (idx >= 0) {
+            local[idx] = saved;
+          } else {
+            local.unshift(saved);
+          }
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(deduplicateInvoices(local)));
         }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(deduplicateInvoices(local)));
+        return saved;
       }
-      return saved;
+    } else {
+      console.error("Server API returned non-OK status on save:", res.status);
     }
   } catch (err) {
-    console.error("Failed to save invoice to server:", err);
+    console.error("Failed to save invoice to server database:", err);
   }
 
   return invoice;
