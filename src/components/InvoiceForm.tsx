@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import { Invoice, InvoiceItem, Step, DEFAULT_COMPANY_HEADER } from "@/types/invoice";
 import { saveInvoice, numberToWords } from "@/lib/storage";
+import { syncNewItemsToCatalog } from "@/lib/settings-storage";
 import SettingsModal from "@/components/SettingsModal";
 
 // Step Components
@@ -140,6 +141,13 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
     if (isSaving) return;
     setIsSaving(true);
     try {
+      // Automatically add any new items to Master Product Catalog
+      try {
+        await syncNewItemsToCatalog(data.items);
+      } catch (catErr) {
+        console.warn("Could not sync items to catalog:", catErr);
+      }
+
       const invoice: Invoice = {
         id: invoiceId,
         createdAt: initialData?.createdAt || new Date().toISOString(),

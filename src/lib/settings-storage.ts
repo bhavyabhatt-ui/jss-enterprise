@@ -1,4 +1,6 @@
-import { SystemSettings, DEFAULT_SYSTEM_SETTINGS } from "@/types/settings";
+import { SystemSettings, DEFAULT_SYSTEM_SETTINGS, CatalogProduct } from "@/types/settings";
+import { InvoiceItem } from "@/types/invoice";
+import { v4 as uuidv4 } from "uuid";
 
 const SETTINGS_LOCAL_KEY = "jss_enterprise_settings";
 
@@ -143,8 +145,45 @@ export async function restoreSystemBackupFromFile(
 }
 
 /**
- * Logout admin - current device or all devices remotely
+ * Automatically add any items not already in the product catalog
  */
+export async function syncNewItemsToCatalog(items: InvoiceItem[]): Promise<CatalogProduct[]> {
+  const currentSettings = getStoredSettings();
+  const catalog = [...(currentSettings.productCatalog || [])];
+  let changed = false;
+
+  for (const item of items) {
+    const desc = item.description?.trim();
+    if (!desc) continue;
+
+    const exists = catalog.some(
+      (p) => p.description.trim().toLowerCase() === desc.toLowerCase()
+    );
+
+    if (!exists) {
+      const code = `ITEM-${catalog.length + 1}`;
+      catalog.push({
+        id: uuidv4(),
+        code,
+        description: desc,
+        specifications: item.specifications?.trim() || "",
+        hsnSac: item.hsnSac?.trim() || "",
+        unit: item.unit || "Nos",
+        rate: Number(item.rate) || 0,
+      });
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    const updated = { ...currentSettings, productCatalog: catalog };
+    await updateSettings(updated);
+    return catalog;
+  }
+
+  return catalog;
+}
+
 export async function logoutAdminSession(allDevices: boolean = false): Promise<void> {
   try {
     await fetch(`/api/auth/logout${allDevices ? "?all=true" : ""}`, {
