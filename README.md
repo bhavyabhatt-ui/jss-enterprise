@@ -15,15 +15,15 @@ Access to the entire system (dashboard, bill creator, editor, exports, and APIs)
 Go to your **Vercel Project Settings → Environment Variables**:
 * `ADMIN_USERNAME`: Your custom admin username (defaults to `adminjss`)
 * `ADMIN_PASSWORD`: Your custom admin password (defaults to `jss2026`)
-* `AUTH_SECRET`: A long random secret string used for signing secure session cookies.
+* `AUTH_SECRET`: A secure secret string used for signing cookies.
 
 ---
 
-## ☁️ 2. Persistent Multi-Device Cloud Synchronization
+## ☁️ 2. Persistent Multi-Device Cloud Synchronization (Vercel In-App DB)
 
-By default, Vercel serverless functions have ephemeral local filesystems. To ensure **all invoices and updates are 100% permanent and instantly synced across all devices** (phone, tablet, office PC), choose **EITHER** of the options below in your Vercel Environment Variables:
+To ensure **all invoices and updates are 100% permanent and instantly synced across all devices** (phone, tablet, office PC), choose any of the native Vercel Storage options:
 
-### Option A: Upstash Redis / Vercel KV (Recommended - 1 Click on Vercel)
+### Option A: Vercel KV (Recommended - 1 Click on Vercel)
 1. In your **Vercel Dashboard**, open your project.
 2. Click the **Storage** tab.
 3. Click **Create Database** → Select **KV (Powered by Upstash)**.
@@ -32,29 +32,42 @@ Vercel automatically injects:
 * `KV_REST_API_URL`
 * `KV_REST_API_TOKEN`
 
-*(Or if you use a free Upstash database directly from [upstash.com](https://upstash.com), add `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`)*.
+*(Or if you use Upstash Redis directly from [upstash.com](https://upstash.com), set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`)*.
 
 ---
 
-### Option B: MongoDB Atlas (Free Cloud Database)
-1. Create a free shared cluster on [MongoDB Atlas](https://www.mongodb.com/atlas).
-2. Create a database user & network access rule (allow access from anywhere: `0.0.0.0/0`).
-3. Under **Connect** → **Drivers**, copy the connection string.
-4. Add to your Vercel Environment Variables:
-```env
-MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/jss_enterprise?retryWrites=true&w=majority
-```
+### Option B: Vercel Postgres / Neon Serverless (1 Click on Vercel)
+1. In your **Vercel Dashboard**, go to **Storage** tab.
+2. Click **Create Database** → Select **Postgres (Neon)**.
+3. Connect it to your project.
+Vercel automatically injects `POSTGRES_URL`. The app will automatically initialize the database table and sync all bills.
+
+---
+
+### Option C: Vercel Blob (1 Click on Vercel)
+1. In your **Vercel Dashboard**, go to **Storage** tab.
+2. Click **Create Database** → Select **Blob**.
+3. Connect it to your project.
+Vercel automatically injects `BLOB_READ_WRITE_TOKEN`.
 
 ---
 
 ## ⚡ 3. Features
 
-* **5-Step Invoice Creation Wizard**:
-  * Step 1: Invoice metadata (No, Date, Challan, PO, Place of supply)
-  * Step 2: Buyer / Customer details (Name, Address, GSTIN, Contact)
-  * Step 3: Product line items with real-time rate & quantity calculation
-  * Step 4: Bank accounts & Tax configuration (CGST, SGST, IGST)
-  * Step 5: Summary review with automatic conversion of Grand Total to words (Indian numbering system)
+* **6-Step Modular Bill Creation Wizard**:
+  * Step 1: Editable Company Header (JSS Enterprise branding, GSTIN, Address, Contact)
+  * Step 2: Invoice Info (Invoice No, Date, Challan, PO, Place of Supply)
+  * Step 3: Buyer Details with **Smart Autocomplete & Recommendations from past bills**
+  * Step 4: Product Items with **Past Bill Product Autofill**, HSN codes, and auto GST calculation
+  * Step 5: Bank details & Terms configuration
+  * Step 6: Summary preview with automatic Number-to-Words conversion in Indian numbering
+* **Financial Analytics Dashboard**:
+  * Total Invoices, Total Gross Revenue, Net Taxable Value, Total GST Tax Collected, Average Bill Value, This Month's bills
+  * GST Tax Breakdown (CGST, SGST, IGST progress bars)
+  * Top 5 Buyers / Customers Leaderboard
+* **List Sorting & Filtering**:
+  * Sort by Date (Newest/Oldest), Amount (High/Low), Invoice No, and Customer Name
+  * Filter by Time Period (All Time, This Month, Last Month, This Financial Year)
 * **Responsive Dual Viewer**:
   * Native Mobile Card View (optimized for mobile touchscreens without horizontal scroll)
   * Print-ready 800px A4 Invoice View with zoom & fit-width controls
@@ -63,8 +76,8 @@ MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/jss_e
   * Zero-margin print dialog support
   * PNG image export via `html-to-image`
   * Microsoft Word (.docx) export with header banner
-  * One-click formatted WhatsApp sharing
-* **Live Cross-Device Sync**: Auto-refetches on window focus, with manual sync trigger on dashboard.
+  * One-click formatted WhatsApp sharing with full bill breakdown
+* **Live Cross-Device Sync**: Auto-refetches on window focus, visibility change, and active 2.5-second live polling.
 
 ---
 

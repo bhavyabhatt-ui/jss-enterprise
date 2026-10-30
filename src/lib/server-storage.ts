@@ -1,63 +1,61 @@
 import fs from "fs";
 import path from "path";
-import dns from "dns";
 import { Invoice } from "@/types/invoice";
 import { Redis } from "@upstash/redis";
-import { MongoClient, Db } from "mongodb";
+import { neon } from "@neondatabase/serverless";
+import { put, list, del } from "@vercel/blob";
 
-// Ensure Node DNS resolves Atlas SRV records reliably
-try {
-  if (typeof dns.setServers === "function") {
-    dns.setServers(["8.8.8.8", "1.1.1.1"]);
-  }
-} catch (err) {}
-
-const DEFAULT_MONGODB_URI =
-  "mongodb+srv://bhattbhavya11_db_user:kfLukyPmsIfRkR7i@jss.yd5r8se.mongodb.net/?retryWrites=true&w=majority";
-
-function getMongoUri(): string {
-  return (process.env.MONGODB_URI || DEFAULT_MONGODB_URI).trim();
-}
-
-// Global cache to persist connections across warm serverless requests
+// Global cache to persist state across warm serverless requests
 declare global {
   var __JSS_INVOICES_CACHE__: Invoice[] | undefined;
-  var __JSS_MONGO_CLIENT__: MongoClient | undefined;
+  var __JSS_POSTGRES_INIT__: boolean | undefined;
 }
 
 const REDIS_KEY = "jss:invoices:v1";
+const BLOB_FILENAME = "jss-enterprise-invoices.json";
 
 /* =========================================================================
- * 1. STORAGE PROVIDER DETECTION
+ * 1. STORAGE PROVIDER DETECTION (VERCEL IN-APP CLOUD DATABASES)
  * ========================================================================= */
 
-export type StorageProviderType = "upstash" | "mongodb" | "file";
+export type StorageProviderType = "vercel_kv" | "vercel_postgres" | "vercel_blob" | "file";
 
 export function getActiveStorageProvider(): {
   type: StorageProviderType;
   isCloud: boolean;
   name: string;
 } {
+  // A. Vercel KV / Upstash Redis (1-Click in Vercel Storage Tab)
   const kvUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
   const kvToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-
   if (kvUrl && kvToken) {
     return {
-      type: "upstash",
+      type: "vercel_kv",
       isCloud: true,
-      name: "Upstash Redis / Vercel KV",
+      name: "Vercel KV (In-App Cloud DB)",
     };
   }
 
-  const mongoUri = getMongoUri();
-  if (mongoUri) {
+  // B. Vercel Postgres / Neon Serverless (1-Click in Vercel Storage Tab)
+  const postgresUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+  if (postgresUrl) {
     return {
-      type: "mongodb",
+      type: "vercel_postgres",
       isCloud: true,
-      name: "MongoDB Atlas Cloud",
+      name: "Vercel Postgres (In-App Cloud DB)",
     };
   }
 
+  // C. Vercel Blob Storage (1-Click in Vercel Storage Tab)
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    return {
+      type: "vercel_blob",
+      isCloud: true,
+      name: "Vercel Blob (In-App Cloud Storage)",
+    };
+  }
+
+  // D. Local fallback
   return {
     type: "file",
     isCloud: false,
@@ -66,10 +64,10 @@ export function getActiveStorageProvider(): {
 }
 
 /* =========================================================================
- * 2. UPSTASH / VERCEL KV ADAPTER
+ * 2. VERCEL KV / UPSTASH REDIS ADAPTER
  * ========================================================================= */
 
-function getUpstashRedisClient(): Redis | null {
+function getVercelKVClient(): Redis | null {
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
@@ -81,38 +79,86 @@ function getUpstashRedisClient(): Redis | null {
       token: token.trim(),
     });
   } catch (err) {
-    console.error("Failed to initialize Upstash Redis client:", err);
+    console.error("Failed to initialize Vercel KV client:", err);
     return null;
   }
 }
 
 /* =========================================================================
- * 3. MONGODB ATLAS ADAPTER
+ * 3. VERCEL POSTGRES / NEON ADAPTER
  * ========================================================================= */
 
-async function getMongoDB(): Promise<Db | null> {
-  const uri = getMongoUri();
-  if (!uri) return null;
+function getPostgresSql() {
+  const url = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+  if (!url) return null;
 
   try {
-    if (!globalThis.__JSS_MONGO_CLIENT__) {
-      globalThis.__JSS_MONGO_CLIENT__ = new MongoClient(uri, {
-        serverSelectionTimeoutMS: 5000,
-        connectTimeoutMS: 8000,
-        maxPoolSize: 10,
-      });
-      await globalThis.__JSS_MONGO_CLIENT__.connect();
-    }
-    return globalThis.__JSS_MONGO_CLIENT__.db("jss_enterprise");
+    return neon(url.trim());
   } catch (err) {
-    console.error("Failed to connect to MongoDB Atlas:", err);
-    globalThis.__JSS_MONGO_CLIENT__ = undefined;
+    console.error("Failed to initialize Vercel Postgres client:", err);
     return null;
   }
 }
 
+async function ensurePostgresTable(sql: any): Promise<void> {
+  if (globalThis.__JSS_POSTGRES_INIT__) return;
+
+  try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS invoices (
+        id VARCHAR(255) PRIMARY KEY,
+        invoice_no VARCHAR(255),
+        data JSONB NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+    globalThis.__JSS_POSTGRES_INIT__ = true;
+  } catch (err) {
+    console.error("Error creating Vercel Postgres table:", err);
+  }
+}
+
 /* =========================================================================
- * 4. LOCAL FILE SYSTEM ADAPTER
+ * 4. VERCEL BLOB ADAPTER
+ * ========================================================================= */
+
+async function getBlobInvoices(): Promise<Invoice[] | null> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
+
+  try {
+    const { blobs } = await list({ prefix: BLOB_FILENAME });
+    const fileBlob = blobs.find((b) => b.pathname === BLOB_FILENAME);
+    if (!fileBlob) return [];
+
+    const res = await fetch(fileBlob.url, { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) return data;
+    }
+  } catch (err) {
+    console.error("Error reading from Vercel Blob:", err);
+  }
+  return null;
+}
+
+async function saveBlobInvoices(invoices: Invoice[]): Promise<boolean> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return false;
+
+  try {
+    await put(BLOB_FILENAME, JSON.stringify(invoices, null, 2), {
+      access: "public",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+    });
+    return true;
+  } catch (err) {
+    console.error("Error saving to Vercel Blob:", err);
+    return false;
+  }
+}
+
+/* =========================================================================
+ * 5. LOCAL FILE SYSTEM ADAPTER
  * ========================================================================= */
 
 function getStorageFilePath(): string {
@@ -160,7 +206,7 @@ function writeToFile(invoices: Invoice[]): void {
 }
 
 /* =========================================================================
- * 5. DEDUPLICATION HELPER
+ * 6. DEDUPLICATION HELPER
  * ========================================================================= */
 
 export function deduplicateList(invoices: Invoice[]): Invoice[] {
@@ -187,19 +233,19 @@ export function deduplicateList(invoices: Invoice[]): Invoice[] {
 }
 
 /* =========================================================================
- * 6. CORE UNIFIED ASYNC STORAGE API (STRICT DATABASE-FIRST - NO PRESET DATA)
+ * 7. CORE UNIFIED ASYNC STORAGE API (STRICT CLOUD DATABASE-FIRST)
  * ========================================================================= */
 
 /**
- * READ ALL: Get all invoices directly from the database
+ * READ ALL: Get all invoices directly from the connected Vercel in-app cloud database
  */
 export async function getServerInvoices(): Promise<Invoice[]> {
   const provider = getActiveStorageProvider();
 
-  // A. UPSTASH REDIS / VERCEL KV
-  if (provider.type === "upstash") {
+  // A. VERCEL KV / UPSTASH REDIS
+  if (provider.type === "vercel_kv") {
     try {
-      const redis = getUpstashRedisClient();
+      const redis = getVercelKVClient();
       if (redis) {
         const raw = await redis.get<Invoice[]>(REDIS_KEY);
         if (Array.isArray(raw)) {
@@ -207,39 +253,50 @@ export async function getServerInvoices(): Promise<Invoice[]> {
           globalThis.__JSS_INVOICES_CACHE__ = deduped;
           return deduped;
         }
-      }
-    } catch (err) {
-      console.error("Upstash Redis read error:", err);
-    }
-  }
-
-  // B. MONGODB ATLAS (PRIMARY CLOUD DATABASE)
-  if (provider.type === "mongodb") {
-    try {
-      const db = await getMongoDB();
-      if (db) {
-        const docs = await db
-          .collection("invoices")
-          .find({}, { projection: { _id: 0 } })
-          .sort({ updatedAt: -1, createdAt: -1 })
-          .toArray();
-
-        if (docs && docs.length > 0) {
-          const deduped = deduplicateList(docs as unknown as Invoice[]);
-          globalThis.__JSS_INVOICES_CACHE__ = deduped;
-          return deduped;
-        }
-
-        // Return empty array - NO PREDEFINED / SAMPLE DATA RESURRECTION
+        // If empty key, return empty array (0 invoices)
         globalThis.__JSS_INVOICES_CACHE__ = [];
         return [];
       }
     } catch (err) {
-      console.error("MongoDB Atlas read error, falling back to cache/file:", err);
+      console.error("Vercel KV read error:", err);
     }
   }
 
-  // C. LOCAL FILE / MEMORY FALLBACK
+  // B. VERCEL POSTGRES / NEON SERVERLESS
+  if (provider.type === "vercel_postgres") {
+    try {
+      const sql = getPostgresSql();
+      if (sql) {
+        await ensurePostgresTable(sql);
+        const rows = await sql`
+          SELECT data FROM invoices
+          ORDER BY updated_at DESC;
+        `;
+        const list = rows.map((r: any) => r.data as Invoice);
+        const deduped = deduplicateList(list);
+        globalThis.__JSS_INVOICES_CACHE__ = deduped;
+        return deduped;
+      }
+    } catch (err) {
+      console.error("Vercel Postgres read error:", err);
+    }
+  }
+
+  // C. VERCEL BLOB STORAGE
+  if (provider.type === "vercel_blob") {
+    try {
+      const blobInvoices = await getBlobInvoices();
+      if (blobInvoices !== null) {
+        const deduped = deduplicateList(blobInvoices);
+        globalThis.__JSS_INVOICES_CACHE__ = deduped;
+        return deduped;
+      }
+    } catch (err) {
+      console.error("Vercel Blob read error:", err);
+    }
+  }
+
+  // D. IN-MEMORY & LOCAL FILE SYSTEM FALLBACK
   if (globalThis.__JSS_INVOICES_CACHE__ && globalThis.__JSS_INVOICES_CACHE__.length > 0) {
     return deduplicateList(globalThis.__JSS_INVOICES_CACHE__);
   }
@@ -250,42 +307,42 @@ export async function getServerInvoices(): Promise<Invoice[]> {
 }
 
 /**
- * READ ONE: Get single invoice by ID
+ * READ ONE: Get single invoice by ID or Invoice Number
  */
 export async function getServerInvoiceById(id: string): Promise<Invoice | null> {
   const provider = getActiveStorageProvider();
   const cleanId = (id || "").trim();
 
-  if (provider.type === "mongodb") {
+  // If Postgres, query directly
+  if (provider.type === "vercel_postgres") {
     try {
-      const db = await getMongoDB();
-      if (db) {
-        const doc = await db.collection("invoices").findOne(
-          {
-            $or: [
-              { id: cleanId },
-              { "invoiceInfo.invoiceNo": cleanId },
-            ],
-          },
-          { projection: { _id: 0 } }
-        );
-        if (doc) return doc as unknown as Invoice;
+      const sql = getPostgresSql();
+      if (sql) {
+        await ensurePostgresTable(sql);
+        const rows = await sql`
+          SELECT data FROM invoices
+          WHERE id = ${cleanId} OR LOWER(invoice_no) = ${cleanId.toLowerCase()}
+          LIMIT 1;
+        `;
+        if (rows.length > 0) {
+          return rows[0].data as Invoice;
+        }
       }
     } catch (err) {
-      console.error("MongoDB findOne error:", err);
+      console.error("Vercel Postgres find error:", err);
     }
   }
 
   const list = await getServerInvoices();
   return (
     list.find(
-      (item) => item.id === cleanId || item.invoiceInfo?.invoiceNo === cleanId
+      (item) => item.id === cleanId || item.invoiceInfo?.invoiceNo?.toLowerCase() === cleanId.toLowerCase()
     ) || null
   );
 }
 
 /**
- * CREATE / UPDATE: Save single invoice atomically to database
+ * CREATE / UPDATE: Save single invoice atomically to the connected cloud database
  */
 export async function saveServerInvoice(invoice: Invoice): Promise<Invoice> {
   const provider = getActiveStorageProvider();
@@ -293,29 +350,35 @@ export async function saveServerInvoice(invoice: Invoice): Promise<Invoice> {
     ...invoice,
     updatedAt: new Date().toISOString(),
   };
+  const invNo = updatedInvoice.invoiceInfo?.invoiceNo?.trim().toLowerCase();
 
-  // 1. MONGODB ATLAS ATOMIC UPSERT
-  if (provider.type === "mongodb") {
+  // 1. VERCEL POSTGRES ATOMIC UPSERT
+  if (provider.type === "vercel_postgres") {
     try {
-      const db = await getMongoDB();
-      if (db) {
-        const col = db.collection("invoices");
-        // Strip _id to prevent MongoDB immutable field errors
-        const { _id, ...cleanDoc }: any = updatedInvoice;
-        await col.updateOne(
-          { id: cleanDoc.id },
-          { $set: cleanDoc },
-          { upsert: true }
-        );
+      const sql = getPostgresSql();
+      if (sql) {
+        await ensurePostgresTable(sql);
+        await sql`
+          INSERT INTO invoices (id, invoice_no, data, updated_at)
+          VALUES (
+            ${updatedInvoice.id},
+            ${invNo || ""},
+            ${JSON.stringify(updatedInvoice)},
+            NOW()
+          )
+          ON CONFLICT (id) DO UPDATE SET
+            invoice_no = EXCLUDED.invoice_no,
+            data = EXCLUDED.data,
+            updated_at = NOW();
+        `;
       }
     } catch (err) {
-      console.error("MongoDB Atlas atomic save error:", err);
+      console.error("Vercel Postgres save error:", err);
     }
   }
 
-  // 2. Also keep cache and fallback file synchronized
+  // 2. Fetch current list to update Vercel KV, Blob, Cache, and File
   const list = await getServerInvoices();
-  const invNo = updatedInvoice.invoiceInfo?.invoiceNo?.trim().toLowerCase();
   const existingIdx = list.findIndex(
     (item) =>
       item.id === updatedInvoice.id ||
@@ -331,13 +394,19 @@ export async function saveServerInvoice(invoice: Invoice): Promise<Invoice> {
   const deduped = deduplicateList(list);
   globalThis.__JSS_INVOICES_CACHE__ = deduped;
 
-  if (provider.type === "upstash") {
+  // 3. VERCEL KV / UPSTASH REDIS SAVE
+  if (provider.type === "vercel_kv") {
     try {
-      const redis = getUpstashRedisClient();
+      const redis = getVercelKVClient();
       if (redis) await redis.set(REDIS_KEY, deduped);
     } catch (err) {
-      console.error("Upstash Redis write error:", err);
+      console.error("Vercel KV write error:", err);
     }
+  }
+
+  // 4. VERCEL BLOB SAVE
+  if (provider.type === "vercel_blob") {
+    await saveBlobInvoices(deduped);
   }
 
   writeToFile(deduped);
@@ -345,101 +414,93 @@ export async function saveServerInvoice(invoice: Invoice): Promise<Invoice> {
 }
 
 /**
- * DELETE: Remove invoice permanently from database
+ * DELETE: Remove invoice permanently from cloud database
  */
 export async function deleteServerInvoice(id: string): Promise<boolean> {
   const provider = getActiveStorageProvider();
   const cleanId = (id || "").trim();
-  let deletedFromDb = false;
 
-  // 1. MONGODB ATLAS ATOMIC DELETE (Wipe by ID or Invoice No, case-insensitive)
-  if (provider.type === "mongodb") {
+  // 1. VERCEL POSTGRES DELETE
+  if (provider.type === "vercel_postgres") {
     try {
-      const db = await getMongoDB();
-      if (db) {
-        const safeRegex = cleanId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const res = await db.collection("invoices").deleteMany({
-          $or: [
-            { id: cleanId },
-            { "invoiceInfo.invoiceNo": cleanId },
-            { "invoiceInfo.invoiceNo": { $regex: new RegExp(`^${safeRegex}$`, "i") } },
-          ],
-        });
-        if ((res.deletedCount || 0) > 0) {
-          deletedFromDb = true;
-        }
+      const sql = getPostgresSql();
+      if (sql) {
+        await ensurePostgresTable(sql);
+        await sql`
+          DELETE FROM invoices
+          WHERE id = ${cleanId} OR LOWER(invoice_no) = ${cleanId.toLowerCase()};
+        `;
       }
     } catch (err) {
-      console.error("MongoDB Atlas delete error:", err);
+      console.error("Vercel Postgres delete error:", err);
     }
   }
 
-  // 2. UPSTASH / VERCEL KV
-  if (provider.type === "upstash") {
-    try {
-      const redis = getUpstashRedisClient();
-      if (redis) {
-        const list = (await redis.get<Invoice[]>(REDIS_KEY)) || [];
-        const filtered = list.filter(
-          (item) => item.id !== cleanId && item.invoiceInfo?.invoiceNo?.toLowerCase() !== cleanId.toLowerCase()
-        );
-        await redis.set(REDIS_KEY, filtered);
-        deletedFromDb = true;
-      }
-    } catch (err) {
-      console.error("Upstash delete error:", err);
-    }
-  }
-
-  // 3. Update in-memory cache
-  if (globalThis.__JSS_INVOICES_CACHE__) {
-    globalThis.__JSS_INVOICES_CACHE__ = globalThis.__JSS_INVOICES_CACHE__.filter(
-      (item) => item.id !== cleanId && item.invoiceInfo?.invoiceNo?.toLowerCase() !== cleanId.toLowerCase()
-    );
-  }
-
-  // 4. Update file storage
-  const fileData = readFromFile().filter(
-    (item) => item.id !== cleanId && item.invoiceInfo?.invoiceNo?.toLowerCase() !== cleanId.toLowerCase()
+  // 2. Update list for Vercel KV, Blob, Cache, and File
+  const list = await getServerInvoices();
+  const filtered = list.filter(
+    (item) =>
+      item.id !== cleanId &&
+      item.invoiceInfo?.invoiceNo?.toLowerCase() !== cleanId.toLowerCase()
   );
-  writeToFile(fileData);
 
+  globalThis.__JSS_INVOICES_CACHE__ = filtered;
+
+  // 3. VERCEL KV UPDATE
+  if (provider.type === "vercel_kv") {
+    try {
+      const redis = getVercelKVClient();
+      if (redis) await redis.set(REDIS_KEY, filtered);
+    } catch (err) {
+      console.error("Vercel KV delete error:", err);
+    }
+  }
+
+  // 4. VERCEL BLOB UPDATE
+  if (provider.type === "vercel_blob") {
+    await saveBlobInvoices(filtered);
+  }
+
+  writeToFile(filtered);
   return true;
 }
 
 /**
- * RESET WHOLE DATABASE: Complete wipe of all records from MongoDB and cache
+ * RESET WHOLE DATABASE: Complete wipe of all records from cloud database and cache
  */
 export async function resetServerDatabase(): Promise<{ success: boolean; message: string }> {
   const provider = getActiveStorageProvider();
 
-  // 1. Wipe MongoDB
-  if (provider.type === "mongodb") {
+  // 1. Vercel Postgres
+  if (provider.type === "vercel_postgres") {
     try {
-      const db = await getMongoDB();
-      if (db) {
-        await db.collection("invoices").deleteMany({});
-        await db.collection("metadata").deleteMany({});
+      const sql = getPostgresSql();
+      if (sql) {
+        await ensurePostgresTable(sql);
+        await sql`DELETE FROM invoices;`;
       }
     } catch (err) {
-      console.error("Error wiping MongoDB:", err);
+      console.error("Error wiping Vercel Postgres:", err);
     }
   }
 
-  // 2. Wipe Upstash Redis
-  if (provider.type === "upstash") {
+  // 2. Vercel KV
+  if (provider.type === "vercel_kv") {
     try {
-      const redis = getUpstashRedisClient();
+      const redis = getVercelKVClient();
       if (redis) await redis.del(REDIS_KEY);
     } catch (err) {
-      console.error("Error wiping Redis:", err);
+      console.error("Error wiping Vercel KV:", err);
     }
   }
 
-  // 3. Clear memory cache
-  globalThis.__JSS_INVOICES_CACHE__ = [];
+  // 3. Vercel Blob
+  if (provider.type === "vercel_blob") {
+    await saveBlobInvoices([]);
+  }
 
-  // 4. Clear local file
+  // 4. Clear memory and file
+  globalThis.__JSS_INVOICES_CACHE__ = [];
   writeToFile([]);
 
   return { success: true, message: "Database reset completely. 0 records remaining." };

@@ -104,7 +104,7 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped));
   }
 
-  // 2. Persist directly to MongoDB Atlas Server Database
+  // 2. Persist directly to Vercel Cloud Server Database
   try {
     const res = await fetch("/api/invoices", {
       method: "POST",

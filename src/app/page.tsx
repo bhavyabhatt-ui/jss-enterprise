@@ -49,7 +49,7 @@ export default function DashboardPage() {
     }, 4500);
   };
 
-  // Live real-time fetch from MongoDB Atlas
+  // Live real-time fetch from Cloud Database
   const liveSyncFromDB = async () => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
@@ -86,7 +86,7 @@ export default function DashboardPage() {
       })
       .catch(() => {});
 
-    // 3. Immediate sync from MongoDB Atlas
+    // 3. Immediate sync from Cloud Database
     liveSyncFromDB();
 
     // 4. Automatic LIVE polling every 2.5 seconds (zero refresh required across devices)
@@ -386,7 +386,7 @@ export default function DashboardPage() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
-              <span>Live Synced ({storageInfo?.name || "MongoDB Atlas Cloud"})</span>
+              <span>Live Synced ({storageInfo?.name || "Vercel Cloud Database"})</span>
             </span>
 
             <span className="hidden sm:inline text-slate-400">|</span>
