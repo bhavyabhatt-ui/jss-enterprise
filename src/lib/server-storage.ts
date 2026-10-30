@@ -14,6 +14,15 @@ declare global {
 const REDIS_KEY = "jss:invoices:v1";
 const BLOB_FILENAME = "jss-enterprise-invoices.json";
 
+const DEFAULT_KV_URL = "https://moved-stork-243662.upstash.io";
+const DEFAULT_KV_TOKEN = "gQAAAAAAA7fOAAIgcDE0MzQxODQzMmE3NGQ0NTZiYmZlMjFmYzRiNjcwYjBjMg";
+
+function getKvCredentials(): { url: string; token: string } {
+  const url = (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || DEFAULT_KV_URL).trim();
+  const token = (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || DEFAULT_KV_TOKEN).trim();
+  return { url, token };
+}
+
 /* =========================================================================
  * 1. STORAGE PROVIDER DETECTION (VERCEL IN-APP CLOUD DATABASES)
  * ========================================================================= */
@@ -26,9 +35,8 @@ export function getActiveStorageProvider(): {
   name: string;
 } {
   // A. Vercel KV / Upstash Redis (1-Click in Vercel Storage Tab)
-  const kvUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const kvToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (kvUrl && kvToken) {
+  const { url, token } = getKvCredentials();
+  if (url && token) {
     return {
       type: "vercel_kv",
       isCloud: true,
@@ -68,8 +76,7 @@ export function getActiveStorageProvider(): {
  * ========================================================================= */
 
 function getVercelKVClient(): Redis | null {
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  const { url, token } = getKvCredentials();
 
   if (!url || !token) return null;
 
