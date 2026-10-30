@@ -1,9 +1,6 @@
-import { Invoice } from "@/types/invoice";
-import { SAMPLE_INITIAL_INVOICE } from "@/lib/sample-data";
+import { Invoice, CompanyHeader, DEFAULT_COMPANY_HEADER } from "@/types/invoice";
 
 const STORAGE_KEY = "jss_enterprise_invoices";
-
-export { SAMPLE_INITIAL_INVOICE };
 
 export function deduplicateInvoices(invoices: Invoice[]): Invoice[] {
   const seenIds = new Set<string>();
@@ -26,8 +23,7 @@ export function deduplicateInvoices(invoices: Invoice[]): Invoice[] {
 }
 
 /**
- * READ ALL: Fetch all invoices from Server Database.
- * Updates local cache to match server state exactly.
+ * READ ALL: Fetch all invoices directly from Server Database.
  */
 export async function fetchInvoices(): Promise<Invoice[]> {
   try {
@@ -43,7 +39,7 @@ export async function fetchInvoices(): Promise<Invoice[]> {
       }
     }
   } catch (err) {
-    console.warn("Server API fetch failed, using local cache fallback:", err);
+    console.warn("Server API fetch failed, using local fallback:", err);
   }
 
   return getAllInvoices();
@@ -73,7 +69,7 @@ export async function fetchInvoiceById(id: string): Promise<Invoice | null> {
       }
     }
   } catch (err) {
-    console.warn(`Server API fetch for invoice ${cleanId} failed, using local cache:`, err);
+    console.warn(`Server API fetch for invoice ${cleanId} failed:`, err);
   }
 
   return getInvoiceById(cleanId);
@@ -85,7 +81,7 @@ export async function fetchInvoiceById(id: string): Promise<Invoice | null> {
 export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
   const invNo = invoice.invoiceInfo?.invoiceNo?.trim().toLowerCase();
 
-  // 1. Immediately update localStorage for instant optimistic UI
+  // 1. Optimistic UI update
   if (typeof window !== "undefined") {
     const invoices = getAllInvoices();
     const existingIndex = invoices.findIndex(
@@ -132,8 +128,6 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
         }
         return saved;
       }
-    } else {
-      console.error("Server API returned non-OK status on save:", res.status);
     }
   } catch (err) {
     console.error("Failed to save invoice to server database:", err);
@@ -156,7 +150,7 @@ export async function deleteInvoice(id: string): Promise<boolean> {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
   }
 
-  // 2. Call DELETE endpoint to permanently remove from MongoDB Atlas
+  // 2. Call DELETE endpoint on server
   try {
     const res = await fetch(`/api/invoices/${encodeURIComponent(cleanId)}`, {
       method: "DELETE",
@@ -173,7 +167,28 @@ export async function deleteInvoice(id: string): Promise<boolean> {
 }
 
 /**
- * Local cache read
+ * RESET DATABASE: Completely wipe all invoices
+ */
+export async function resetDatabase(): Promise<boolean> {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.setItem(STORAGE_KEY, "[]");
+  }
+
+  try {
+    const res = await fetch("/api/invoices/reset", {
+      method: "POST",
+      cache: "no-store",
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("Failed to reset database:", err);
+    return false;
+  }
+}
+
+/**
+ * Local cache read - Returns empty array if none, never pre-seeded sample data
  */
 export function getAllInvoices(): Invoice[] {
   if (typeof window === "undefined") return [];
@@ -198,6 +213,67 @@ export function getInvoiceById(id: string): Invoice | null {
       (inv) => inv.id === cleanId || inv.invoiceInfo?.invoiceNo === cleanId
     ) || null
   );
+}
+
+/**
+ * Extract smart recommendations from historical invoices
+ * To make filling new bills fast and effortless
+ */
+export function getInvoiceRecommendations(invoices: Invoice[]) {
+  const customerMap = new Map<string, {
+    customerName: string;
+    address: string;
+    cityState: string;
+    gstinPan: string;
+    contactNo: string;
+  }>();
+
+  const itemMap = new Map<string, {
+    description: string;
+    specifications: string;
+    hsnSac: string;
+    unit: string;
+    rate: number;
+  }>();
+
+  for (const inv of invoices) {
+    // 1. Customer suggestions
+    if (inv.buyerDetails?.customerName) {
+      const name = inv.buyerDetails.customerName.trim();
+      if (!customerMap.has(name.toLowerCase())) {
+        customerMap.set(name.toLowerCase(), {
+          customerName: name,
+          address: inv.buyerDetails.address || "",
+          cityState: inv.buyerDetails.cityState || "",
+          gstinPan: inv.buyerDetails.gstinPan || "",
+          contactNo: inv.buyerDetails.contactNo || "",
+        });
+      }
+    }
+
+    // 2. Item / Product suggestions
+    if (Array.isArray(inv.items)) {
+      for (const it of inv.items) {
+        if (it?.description) {
+          const desc = it.description.trim();
+          if (!itemMap.has(desc.toLowerCase())) {
+            itemMap.set(desc.toLowerCase(), {
+              description: desc,
+              specifications: it.specifications || "",
+              hsnSac: it.hsnSac || "",
+              unit: it.unit || "Nos",
+              rate: Number(it.rate) || 0,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    customers: Array.from(customerMap.values()),
+    items: Array.from(itemMap.values()),
+  };
 }
 
 /**

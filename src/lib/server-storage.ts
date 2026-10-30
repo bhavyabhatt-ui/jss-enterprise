@@ -2,11 +2,8 @@ import fs from "fs";
 import path from "path";
 import dns from "dns";
 import { Invoice } from "@/types/invoice";
-import { SAMPLE_INITIAL_INVOICE } from "@/lib/sample-data";
 import { Redis } from "@upstash/redis";
 import { MongoClient, Db } from "mongodb";
-
-export { SAMPLE_INITIAL_INVOICE };
 
 // Ensure Node DNS resolves Atlas SRV records reliably
 try {
@@ -109,7 +106,6 @@ async function getMongoDB(): Promise<Db | null> {
     return globalThis.__JSS_MONGO_CLIENT__.db("jss_enterprise");
   } catch (err) {
     console.error("Failed to connect to MongoDB Atlas:", err);
-    // Reset so next call retries fresh connection
     globalThis.__JSS_MONGO_CLIENT__ = undefined;
     return null;
   }
@@ -191,7 +187,7 @@ export function deduplicateList(invoices: Invoice[]): Invoice[] {
 }
 
 /* =========================================================================
- * 6. CORE UNIFIED ASYNC STORAGE API (STRICT DATABASE-FIRST)
+ * 6. CORE UNIFIED ASYNC STORAGE API (STRICT DATABASE-FIRST - NO PRESET DATA)
  * ========================================================================= */
 
 /**
@@ -228,32 +224,13 @@ export async function getServerInvoices(): Promise<Invoice[]> {
           .sort({ updatedAt: -1, createdAt: -1 })
           .toArray();
 
-        // Check if database was already initialized
-        const meta = await db.collection("metadata").findOne({ _id: "init_state" as any });
-
         if (docs && docs.length > 0) {
           const deduped = deduplicateList(docs as unknown as Invoice[]);
           globalThis.__JSS_INVOICES_CACHE__ = deduped;
           return deduped;
         }
 
-        // Only seed once on brand-new setup if metadata has never been created
-        if (!meta) {
-          await db.collection("invoices").updateOne(
-            { id: SAMPLE_INITIAL_INVOICE.id },
-            { $set: SAMPLE_INITIAL_INVOICE },
-            { upsert: true }
-          );
-          await db.collection("metadata").updateOne(
-            { _id: "init_state" as any },
-            { $set: { initializedAt: new Date().toISOString() } },
-            { upsert: true }
-          );
-          globalThis.__JSS_INVOICES_CACHE__ = [SAMPLE_INITIAL_INVOICE];
-          return [SAMPLE_INITIAL_INVOICE];
-        }
-
-        // If meta exists and docs is empty, user deleted all bills -> Keep it empty!
+        // Return empty array - NO PREDEFINED / SAMPLE DATA RESURRECTION
         globalThis.__JSS_INVOICES_CACHE__ = [];
         return [];
       }
@@ -323,13 +300,6 @@ export async function saveServerInvoice(invoice: Invoice): Promise<Invoice> {
       const db = await getMongoDB();
       if (db) {
         const col = db.collection("invoices");
-        // Ensure metadata is marked initialized so sample data never re-injects
-        await db.collection("metadata").updateOne(
-          { _id: "init_state" as any },
-          { $set: { initializedAt: new Date().toISOString() } },
-          { upsert: true }
-        );
-
         // Strip _id to prevent MongoDB immutable field errors
         const { _id, ...cleanDoc }: any = updatedInvoice;
         await col.updateOne(
@@ -337,7 +307,6 @@ export async function saveServerInvoice(invoice: Invoice): Promise<Invoice> {
           { $set: cleanDoc },
           { upsert: true }
         );
-        console.log(`[SAVE] Successfully saved invoice ${cleanDoc.id} (${cleanDoc.invoiceInfo?.invoiceNo}) to MongoDB`);
       }
     } catch (err) {
       console.error("MongoDB Atlas atomic save error:", err);
@@ -383,28 +352,22 @@ export async function deleteServerInvoice(id: string): Promise<boolean> {
   const cleanId = (id || "").trim();
   let deletedFromDb = false;
 
-  console.log(`[DELETE REQUEST] Deleting invoice ID/No: "${cleanId}"`);
-
-  // 1. MONGODB ATLAS ATOMIC DELETE
+  // 1. MONGODB ATLAS ATOMIC DELETE (Wipe by ID or Invoice No, case-insensitive)
   if (provider.type === "mongodb") {
     try {
       const db = await getMongoDB();
       if (db) {
-        // Ensure metadata is recorded so empty collection does not re-seed sample
-        await db.collection("metadata").updateOne(
-          { _id: "init_state" as any },
-          { $set: { initializedAt: new Date().toISOString() } },
-          { upsert: true }
-        );
-
-        const res = await db.collection("invoices").deleteOne({
+        const safeRegex = cleanId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const res = await db.collection("invoices").deleteMany({
           $or: [
             { id: cleanId },
             { "invoiceInfo.invoiceNo": cleanId },
+            { "invoiceInfo.invoiceNo": { $regex: new RegExp(`^${safeRegex}$`, "i") } },
           ],
         });
-        deletedFromDb = (res.deletedCount || 0) > 0;
-        console.log(`[DELETE] MongoDB deletedCount for "${cleanId}": ${res.deletedCount}`);
+        if ((res.deletedCount || 0) > 0) {
+          deletedFromDb = true;
+        }
       }
     } catch (err) {
       console.error("MongoDB Atlas delete error:", err);
@@ -418,7 +381,7 @@ export async function deleteServerInvoice(id: string): Promise<boolean> {
       if (redis) {
         const list = (await redis.get<Invoice[]>(REDIS_KEY)) || [];
         const filtered = list.filter(
-          (item) => item.id !== cleanId && item.invoiceInfo?.invoiceNo !== cleanId
+          (item) => item.id !== cleanId && item.invoiceInfo?.invoiceNo?.toLowerCase() !== cleanId.toLowerCase()
         );
         await redis.set(REDIS_KEY, filtered);
         deletedFromDb = true;
@@ -431,15 +394,53 @@ export async function deleteServerInvoice(id: string): Promise<boolean> {
   // 3. Update in-memory cache
   if (globalThis.__JSS_INVOICES_CACHE__) {
     globalThis.__JSS_INVOICES_CACHE__ = globalThis.__JSS_INVOICES_CACHE__.filter(
-      (item) => item.id !== cleanId && item.invoiceInfo?.invoiceNo !== cleanId
+      (item) => item.id !== cleanId && item.invoiceInfo?.invoiceNo?.toLowerCase() !== cleanId.toLowerCase()
     );
   }
 
   // 4. Update file storage
   const fileData = readFromFile().filter(
-    (item) => item.id !== cleanId && item.invoiceInfo?.invoiceNo !== cleanId
+    (item) => item.id !== cleanId && item.invoiceInfo?.invoiceNo?.toLowerCase() !== cleanId.toLowerCase()
   );
   writeToFile(fileData);
 
-  return deletedFromDb;
+  return true;
+}
+
+/**
+ * RESET WHOLE DATABASE: Complete wipe of all records from MongoDB and cache
+ */
+export async function resetServerDatabase(): Promise<{ success: boolean; message: string }> {
+  const provider = getActiveStorageProvider();
+
+  // 1. Wipe MongoDB
+  if (provider.type === "mongodb") {
+    try {
+      const db = await getMongoDB();
+      if (db) {
+        await db.collection("invoices").deleteMany({});
+        await db.collection("metadata").deleteMany({});
+      }
+    } catch (err) {
+      console.error("Error wiping MongoDB:", err);
+    }
+  }
+
+  // 2. Wipe Upstash Redis
+  if (provider.type === "upstash") {
+    try {
+      const redis = getUpstashRedisClient();
+      if (redis) await redis.del(REDIS_KEY);
+    } catch (err) {
+      console.error("Error wiping Redis:", err);
+    }
+  }
+
+  // 3. Clear memory cache
+  globalThis.__JSS_INVOICES_CACHE__ = [];
+
+  // 4. Clear local file
+  writeToFile([]);
+
+  return { success: true, message: "Database reset completely. 0 records remaining." };
 }
