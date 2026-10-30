@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { InvoiceItem, TaxDetails } from "@/types/invoice";
-import { Plus, Trash2, Sparkles } from "lucide-react";
+import { Plus, Trash2, Sparkles, Package } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { getAllInvoices, getInvoiceRecommendations } from "@/lib/storage";
+import { getStoredSettings, fetchSettings } from "@/lib/settings-storage";
 
 interface Props {
   items: InvoiceItem[];
@@ -34,6 +35,7 @@ export default function Step3Items({
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
   const [itemRecommendations, setItemRecommendations] = useState<
     Array<{
+      code?: string;
       description: string;
       specifications: string;
       hsnSac: string;
@@ -45,7 +47,55 @@ export default function Step3Items({
   useEffect(() => {
     const historical = getAllInvoices();
     const { items: recItems } = getInvoiceRecommendations(historical);
-    setItemRecommendations(recItems);
+
+    type ItemTemplate = {
+      code?: string;
+      description: string;
+      specifications: string;
+      hsnSac: string;
+      unit: string;
+      rate: number;
+    };
+
+    const s = getStoredSettings();
+    const catalogItems: ItemTemplate[] = (s.productCatalog || []).map((p) => ({
+      code: p.code,
+      description: p.description,
+      specifications: p.specifications,
+      hsnSac: p.hsnSac,
+      unit: p.unit,
+      rate: p.rate,
+    }));
+
+    // Merge catalog items first, then historical
+    const combined: ItemTemplate[] = [...catalogItems];
+    recItems.forEach((rec) => {
+      if (!combined.some((c) => c.description.toLowerCase() === rec.description.toLowerCase())) {
+        combined.push({ ...rec, code: "" });
+      }
+    });
+
+    setItemRecommendations(combined);
+
+    fetchSettings().then((cloudSettings) => {
+      if (cloudSettings.productCatalog && cloudSettings.productCatalog.length > 0) {
+        const cloudItems: ItemTemplate[] = cloudSettings.productCatalog.map((p) => ({
+          code: p.code,
+          description: p.description,
+          specifications: p.specifications,
+          hsnSac: p.hsnSac,
+          unit: p.unit,
+          rate: p.rate,
+        }));
+        const reMerged: ItemTemplate[] = [...cloudItems];
+        combined.forEach((item) => {
+          if (!reMerged.some((m) => m.description.toLowerCase() === item.description.toLowerCase())) {
+            reMerged.push(item);
+          }
+        });
+        setItemRecommendations(reMerged);
+      }
+    });
   }, []);
 
   function updateItem(id: string, key: keyof InvoiceItem, value: string | number) {
@@ -153,8 +203,12 @@ export default function Step3Items({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {items.map((item, idx) => {
+              const q = (item.description || "").toLowerCase();
               const matchingRecs = itemRecommendations.filter((r) =>
-                r.description.toLowerCase().includes((item.description || "").toLowerCase())
+                !q ||
+                r.description.toLowerCase().includes(q) ||
+                (r.code && r.code.toLowerCase().includes(q)) ||
+                r.specifications.toLowerCase().includes(q)
               );
 
               return (
@@ -169,7 +223,7 @@ export default function Step3Items({
                         updateItem(item.id, "description", e.target.value);
                         setActiveItemId(item.id);
                       }}
-                      placeholder="Item name / description"
+                      placeholder="Item name / code / description"
                       className={`${inputClass} mb-1 font-medium`}
                     />
                     <input
@@ -182,9 +236,9 @@ export default function Step3Items({
 
                     {/* Autocomplete Popup */}
                     {activeItemId === item.id && matchingRecs.length > 0 && (
-                      <div className="absolute left-3 right-3 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y divide-slate-100">
-                        <div className="p-2 bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                          <span>Suggestions from previous bills</span>
+                      <div className="absolute left-3 right-3 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100">
+                        <div className="p-2 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+                          <span>Product Catalog &amp; Past Templates</span>
                           <button
                             type="button"
                             onClick={() => setActiveItemId(null)}
@@ -201,13 +255,25 @@ export default function Step3Items({
                             className="w-full text-left p-2.5 hover:bg-amber-50/70 transition-colors flex items-center justify-between gap-2"
                           >
                             <div className="min-w-0 flex-1">
-                              <p className="font-bold text-xs text-slate-900 truncate">{rec.description}</p>
-                              <p className="text-[10px] text-slate-400 truncate">
+                              <p className="font-bold text-xs text-slate-900 truncate">
+                                {rec.code && (
+                                  <span className="font-mono text-amber-600 mr-1.5 font-bold">
+                                    [{rec.code}]
+                                  </span>
+                                )}
+                                <span>{rec.description}</span>
+                              </p>
+                              {rec.specifications && (
+                                <p className="text-[10px] text-slate-500 truncate">
+                                  {rec.specifications}
+                                </p>
+                              )}
+                              <p className="text-[10px] text-slate-400 truncate mt-0.5">
                                 HSN: {rec.hsnSac || "-"} • {rec.unit} • ₹{Number(rec.rate).toLocaleString("en-IN")}
                               </p>
                             </div>
                             <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-semibold shrink-0">
-                              Use Template
+                              Autofill
                             </span>
                           </button>
                         ))}

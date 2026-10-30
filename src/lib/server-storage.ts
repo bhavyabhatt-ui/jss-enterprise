@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { Invoice } from "@/types/invoice";
+import { SystemSettings, DEFAULT_SYSTEM_SETTINGS } from "@/types/settings";
 import { Redis } from "@upstash/redis";
 import { neon } from "@neondatabase/serverless";
 import { put, list, del } from "@vercel/blob";
@@ -8,10 +9,12 @@ import { put, list, del } from "@vercel/blob";
 // Global cache to persist state across warm serverless requests
 declare global {
   var __JSS_INVOICES_CACHE__: Invoice[] | undefined;
+  var __JSS_SETTINGS_CACHE__: SystemSettings | undefined;
   var __JSS_POSTGRES_INIT__: boolean | undefined;
 }
 
 const REDIS_KEY = "jss:invoices:v1";
+const SETTINGS_KEY = "jss:settings:v1";
 const BLOB_FILENAME = "jss-enterprise-invoices.json";
 
 const DEFAULT_KV_URL = "https://moved-stork-243662.upstash.io";
@@ -511,4 +514,210 @@ export async function resetServerDatabase(): Promise<{ success: boolean; message
   writeToFile([]);
 
   return { success: true, message: "Database reset completely. 0 records remaining." };
+}
+
+/* =========================================================================
+ * 8. SYSTEM SETTINGS & PREFILLED PROFILES API
+ * ========================================================================= */
+
+function getSettingsFilePath(): string {
+  const tmpPath = path.join("/tmp", "jss_settings.json");
+  const localPath = path.join(process.cwd(), "data", "settings.json");
+  try {
+    const dir = path.join(process.cwd(), "data");
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return localPath;
+  } catch {
+    return tmpPath;
+  }
+}
+
+function readSettingsFromFile(): SystemSettings {
+  const filePath = getSettingsFilePath();
+  try {
+    if (fs.existsSync(filePath)) {
+      const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+      if (data && typeof data === "object") {
+        return { ...DEFAULT_SYSTEM_SETTINGS, ...data };
+      }
+    }
+  } catch (err) {
+    console.warn("Could not read settings from file:", err);
+  }
+  return { ...DEFAULT_SYSTEM_SETTINGS };
+}
+
+function writeSettingsToFile(settings: SystemSettings): void {
+  const filePath = getSettingsFilePath();
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(settings, null, 2), "utf-8");
+  } catch (err) {
+    console.warn("Could not write settings to file:", err);
+  }
+}
+
+/**
+ * READ SETTINGS: Fetch from Vercel KV / Redis, with cache and file fallback
+ */
+export async function getServerSettings(): Promise<SystemSettings> {
+  const provider = getActiveStorageProvider();
+
+  // A. Vercel KV / Upstash Redis
+  if (provider.type === "vercel_kv") {
+    try {
+      const redis = getVercelKVClient();
+      if (redis) {
+        const stored = await redis.get<SystemSettings>(SETTINGS_KEY);
+        if (stored && typeof stored === "object") {
+          const merged: SystemSettings = {
+            ...DEFAULT_SYSTEM_SETTINGS,
+            ...stored,
+          };
+          globalThis.__JSS_SETTINGS_CACHE__ = merged;
+          return merged;
+        }
+      }
+    } catch (err) {
+      console.error("Vercel KV settings read error:", err);
+    }
+  }
+
+  // B. In-Memory Cache
+  if (globalThis.__JSS_SETTINGS_CACHE__) {
+    return globalThis.__JSS_SETTINGS_CACHE__;
+  }
+
+  // C. Local file fallback
+  const fileSettings = readSettingsFromFile();
+  globalThis.__JSS_SETTINGS_CACHE__ = fileSettings;
+  return fileSettings;
+}
+
+/**
+ * SAVE SETTINGS: Persist to Vercel KV / Redis, cache, and file
+ */
+export async function saveServerSettings(settings: SystemSettings): Promise<SystemSettings> {
+  const provider = getActiveStorageProvider();
+  const merged: SystemSettings = {
+    ...DEFAULT_SYSTEM_SETTINGS,
+    ...settings,
+  };
+
+  globalThis.__JSS_SETTINGS_CACHE__ = merged;
+
+  // 1. Vercel KV
+  if (provider.type === "vercel_kv") {
+    try {
+      const redis = getVercelKVClient();
+      if (redis) await redis.set(SETTINGS_KEY, merged);
+    } catch (err) {
+      console.error("Vercel KV settings save error:", err);
+    }
+  }
+
+  // 2. File
+  writeSettingsToFile(merged);
+  return merged;
+}
+
+/**
+ * BUMP AUTH SESSION VERSION: Remote Logout from all devices
+ */
+export async function bumpAuthSessionVersion(): Promise<number> {
+  const current = await getServerSettings();
+  const newVersion = (current.authSessionVersion || 1) + 1;
+  await saveServerSettings({
+    ...current,
+    authSessionVersion: newVersion,
+  });
+  return newVersion;
+}
+
+/**
+ * GET AUTH SESSION VERSION
+ */
+export async function getAuthSessionVersion(): Promise<number> {
+  const current = await getServerSettings();
+  return current.authSessionVersion || 1;
+}
+
+/**
+ * EXPORT FULL SYSTEM BACKUP: Invoices + Settings + Profiles
+ */
+export async function getFullSystemBackup(): Promise<{
+  version: string;
+  exportedAt: string;
+  invoices: Invoice[];
+  settings: SystemSettings;
+}> {
+  const invoices = await getServerInvoices();
+  const settings = await getServerSettings();
+
+  return {
+    version: "2.0",
+    exportedAt: new Date().toISOString(),
+    invoices,
+    settings,
+  };
+}
+
+/**
+ * RESTORE SYSTEM BACKUP: Resume from backup JSON data
+ */
+export async function restoreSystemBackup(
+  backup: { invoices?: Invoice[]; settings?: Partial<SystemSettings> },
+  mode: "merge" | "replace" = "merge"
+): Promise<{ success: boolean; invoiceCount: number; message: string }> {
+  const incomingInvoices = Array.isArray(backup.invoices) ? backup.invoices : [];
+  const incomingSettings = backup.settings || {};
+
+  let finalInvoices: Invoice[] = [];
+
+  if (mode === "replace") {
+    finalInvoices = deduplicateList(incomingInvoices);
+  } else {
+    // Merge
+    const existing = await getServerInvoices();
+    finalInvoices = deduplicateList([...incomingInvoices, ...existing]);
+  }
+
+  // Save invoices
+  const provider = getActiveStorageProvider();
+  globalThis.__JSS_INVOICES_CACHE__ = finalInvoices;
+
+  if (provider.type === "vercel_kv") {
+    try {
+      const redis = getVercelKVClient();
+      if (redis) await redis.set(REDIS_KEY, finalInvoices);
+    } catch (err) {
+      console.error("Failed to restore invoices to Vercel KV:", err);
+    }
+  }
+
+  if (provider.type === "vercel_blob") {
+    await saveBlobInvoices(finalInvoices);
+  }
+
+  writeToFile(finalInvoices);
+
+  // Restore Settings
+  const currentSettings = await getServerSettings();
+  const updatedSettings: SystemSettings = {
+    ...currentSettings,
+    ...incomingSettings,
+    companyProfiles: incomingSettings.companyProfiles || currentSettings.companyProfiles,
+    productCatalog: incomingSettings.productCatalog || currentSettings.productCatalog,
+    bankProfiles: incomingSettings.bankProfiles || currentSettings.bankProfiles,
+    lastBackupAt: new Date().toISOString(),
+  };
+
+  await saveServerSettings(updatedSettings);
+
+  return {
+    success: true,
+    invoiceCount: finalInvoices.length,
+    message: `System successfully restored with ${finalInvoices.length} bills.`,
+  };
 }

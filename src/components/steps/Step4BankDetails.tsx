@@ -1,6 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { BankDetails } from "@/types/invoice";
+import { BankProfile } from "@/types/settings";
+import { getStoredSettings, fetchSettings } from "@/lib/settings-storage";
+import { Check, Landmark } from "lucide-react";
 
 interface Props {
   bankDetails: BankDetails;
@@ -40,6 +44,32 @@ export default function Step4BankDetails({
   onChange,
   onTermsChange,
 }: Props) {
+  const [profiles, setProfiles] = useState<BankProfile[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
+
+  useEffect(() => {
+    const s = getStoredSettings();
+    if (s.bankProfiles && s.bankProfiles.length > 0) {
+      setProfiles(s.bankProfiles);
+      const def = s.bankProfiles.find((b) => b.isDefault) || s.bankProfiles[0];
+      setSelectedProfileId(def.id);
+    }
+
+    fetchSettings().then((cloudSettings) => {
+      if (cloudSettings.bankProfiles && cloudSettings.bankProfiles.length > 0) {
+        setProfiles(cloudSettings.bankProfiles);
+      }
+    });
+  }, []);
+
+  const handleSelectBankProfile = (prof: BankProfile) => {
+    setSelectedProfileId(prof.id);
+    onChange({ ...prof.bankDetails });
+    if (prof.termsAndConditions) {
+      onTermsChange(prof.termsAndConditions);
+    }
+  };
+
   const update = (key: keyof BankDetails, value: string) => {
     onChange({ ...bankDetails, [key]: value });
   };
@@ -47,10 +77,51 @@ export default function Step4BankDetails({
   return (
     <div className="p-6">
       {/* Title */}
-      <div className="mb-5 pb-4 border-b border-slate-100">
-        <h3 className="text-base font-bold text-slate-900">Step 4: Bank Payment Details &amp; Terms</h3>
-        <p className="text-slate-500 text-xs mt-0.5">Configure your bank account information and bill policy terms</p>
+      <div className="mb-5 pb-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <Landmark className="w-5 h-5 text-amber-500" />
+            <span>Step 4: Bank Payment Details &amp; Terms</span>
+          </h3>
+          <p className="text-slate-500 text-xs mt-0.5">
+            Select a saved bank profile or configure specific account details for this bill
+          </p>
+        </div>
       </div>
+
+      {/* ── SAVED BANK PROFILES SELECTOR ── */}
+      {profiles.length > 0 && (
+        <div className="mb-6 bg-amber-50/70 border border-amber-200/80 rounded-xl p-3.5">
+          <label className="block text-[11px] font-bold text-amber-900 uppercase tracking-wider mb-2">
+            Choose Saved Bank Profile (Configurable in Settings Menu):
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {profiles.map((prof) => {
+              const isSelected =
+                prof.id === selectedProfileId ||
+                prof.bankDetails.accountNo.trim() === bankDetails.accountNo.trim();
+              return (
+                <button
+                  key={prof.id}
+                  type="button"
+                  onClick={() => handleSelectBankProfile(prof)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-2xs ${
+                    isSelected
+                      ? "bg-amber-500 text-white shadow-xs"
+                      : "bg-white text-slate-700 border border-slate-300 hover:border-amber-400"
+                  }`}
+                >
+                  {isSelected && <Check className="w-3.5 h-3.5" />}
+                  <span>{prof.profileName}</span>
+                  {prof.isDefault && (
+                    <span className="text-[10px] opacity-75 font-normal">(Default)</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <Field

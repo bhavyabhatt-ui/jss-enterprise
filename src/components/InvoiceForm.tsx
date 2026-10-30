@@ -4,7 +4,8 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import { Invoice, InvoiceItem, Step, DEFAULT_COMPANY_HEADER } from "@/types/invoice";
-import { saveInvoice, numberToWords, logoutAdmin } from "@/lib/storage";
+import { saveInvoice, numberToWords } from "@/lib/storage";
+import SettingsModal from "@/components/SettingsModal";
 
 // Step Components
 import StepIndicator from "@/components/StepIndicator";
@@ -14,7 +15,7 @@ import Step2BuyerDetails from "@/components/steps/Step2BuyerDetails";
 import Step3Items from "@/components/steps/Step3Items";
 import Step4BankDetails from "@/components/steps/Step4BankDetails";
 import Step5Summary from "@/components/steps/Step5Summary";
-import { ArrowLeft, ArrowRight, Save, LogOut } from "lucide-react";
+import { ArrowLeft, ArrowRight, Save, Settings } from "lucide-react";
 
 const defaultInvoice: Omit<Invoice, "id" | "createdAt" | "updatedAt"> = {
   header: { ...DEFAULT_COMPANY_HEADER },
@@ -76,6 +77,7 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
   const [step, setStep] = useState<Step>(1);
   const [invoiceId] = useState<string>(() => initialData?.id || uuidv4());
   const [isSaving, setIsSaving] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [data, setData] = useState<Omit<Invoice, "id" | "createdAt" | "updatedAt">>(
     initialData
       ? {
@@ -191,15 +193,21 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
             </div>
             <button
               type="button"
-              onClick={() => logoutAdmin()}
-              title="Sign out of Admin"
-              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-200"
+              onClick={() => setShowSettingsModal(true)}
+              title="System Settings & Master Data"
+              className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-transparent hover:border-amber-200"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <Settings className="w-4 h-4" />
             </button>
           </div>
         </div>
       </header>
+
+      {/* ── SETTINGS MODAL ── */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+      />
 
       {/* ── FORM CONTAINER ── */}
       <main className="max-w-5xl mx-auto px-4 py-6">

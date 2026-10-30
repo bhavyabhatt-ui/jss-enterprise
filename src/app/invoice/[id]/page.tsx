@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getInvoiceById, fetchInvoiceById, logoutAdmin } from "@/lib/storage";
+import { getInvoiceById, fetchInvoiceById } from "@/lib/storage";
 import { exportToPDF, exportToImage, exportInvoiceToExcel, shareInvoiceToWhatsApp, printInvoice } from "@/lib/export";
 import { Invoice } from "@/types/invoice";
 import ResponsiveInvoiceViewer from "@/components/ResponsiveInvoiceViewer";
+import SettingsModal from "@/components/SettingsModal";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -17,7 +18,7 @@ import {
   Loader2,
   Check,
   Share2,
-  LogOut,
+  Settings,
 } from "lucide-react";
 
 type ExportType = "pdf" | "image" | "excel" | "whatsapp" | "print" | null;
@@ -29,6 +30,7 @@ export default function InvoiceViewPage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [exporting, setExporting] = useState<ExportType>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -328,18 +330,24 @@ export default function InvoiceViewPage() {
                 <span>Edit</span>
               </Link>
 
-              {/* Logout */}
+              {/* Settings */}
               <button
                 type="button"
-                onClick={() => logoutAdmin()}
-                title="Sign out of Admin"
-                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors ml-1"
+                onClick={() => setShowSettingsModal(true)}
+                title="System Settings"
+                className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors ml-1"
               >
-                <LogOut className="w-4 h-4" />
+                <Settings className="w-4 h-4" />
               </button>
             </div>
           </div>
         </div>
+
+        {/* ── SETTINGS MODAL ── */}
+        <SettingsModal
+          isOpen={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+        />
 
         {/* Success Toast */}
         {toastMessage && (

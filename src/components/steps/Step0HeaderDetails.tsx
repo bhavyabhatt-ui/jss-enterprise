@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { CompanyHeader, DEFAULT_COMPANY_HEADER } from "@/types/invoice";
-import { Building2, Sparkles, MapPin, Phone, Mail, FileText, Hash, RotateCcw } from "lucide-react";
+import { CompanyProfile } from "@/types/settings";
+import { getStoredSettings, fetchSettings } from "@/lib/settings-storage";
+import { Building2, Sparkles, MapPin, Phone, Mail, FileText, Hash, RotateCcw, Check } from "lucide-react";
 
 interface Props {
   data: CompanyHeader;
@@ -10,12 +13,34 @@ interface Props {
 
 export default function Step0HeaderDetails({ data, onChange }: Props) {
   const header = data || DEFAULT_COMPANY_HEADER;
+  const [profiles, setProfiles] = useState<CompanyProfile[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
+
+  useEffect(() => {
+    const s = getStoredSettings();
+    if (s.companyProfiles && s.companyProfiles.length > 0) {
+      setProfiles(s.companyProfiles);
+      const def = s.companyProfiles.find((p) => p.isDefault) || s.companyProfiles[0];
+      setSelectedProfileId(def.id);
+    }
+
+    fetchSettings().then((cloudSettings) => {
+      if (cloudSettings.companyProfiles && cloudSettings.companyProfiles.length > 0) {
+        setProfiles(cloudSettings.companyProfiles);
+      }
+    });
+  }, []);
 
   const handleChange = (field: keyof CompanyHeader, value: string) => {
     onChange({
       ...header,
       [field]: value,
     });
+  };
+
+  const handleSelectProfile = (prof: CompanyProfile) => {
+    setSelectedProfileId(prof.id);
+    onChange({ ...prof.header });
   };
 
   const handleReset = () => {
@@ -32,7 +57,7 @@ export default function Step0HeaderDetails({ data, onChange }: Props) {
             <span>Company Header &amp; Bill Details</span>
           </h3>
           <p className="text-slate-500 text-xs mt-0.5">
-            Customize the official company header, address, GSTIN, and contact details for this invoice.
+            Select a saved company profile or customize the header details for this bill.
           </p>
         </div>
 
@@ -45,6 +70,40 @@ export default function Step0HeaderDetails({ data, onChange }: Props) {
           <span>Reset Defaults</span>
         </button>
       </div>
+
+      {/* ── SAVED COMPANY PROFILES SELECTOR ── */}
+      {profiles.length > 0 && (
+        <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3.5">
+          <label className="block text-[11px] font-bold text-amber-900 uppercase tracking-wider mb-2">
+            Choose Saved Company Profile (Configurable in Settings Menu):
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {profiles.map((prof) => {
+              const isSelected =
+                prof.id === selectedProfileId ||
+                prof.header.companyName.trim().toLowerCase() === header.companyName.trim().toLowerCase();
+              return (
+                <button
+                  key={prof.id}
+                  type="button"
+                  onClick={() => handleSelectProfile(prof)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-2xs ${
+                    isSelected
+                      ? "bg-amber-500 text-white shadow-xs"
+                      : "bg-white text-slate-700 border border-slate-300 hover:border-amber-400"
+                  }`}
+                >
+                  {isSelected && <Check className="w-3.5 h-3.5" />}
+                  <span>{prof.profileName}</span>
+                  {prof.isDefault && (
+                    <span className="text-[10px] opacity-75 font-normal">(Default)</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── LIVE HEADER PREVIEW BOX ── */}
       <div>

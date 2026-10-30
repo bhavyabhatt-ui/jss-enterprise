@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
-import { getAllInvoices, fetchInvoices, deleteInvoice, logoutAdmin } from "@/lib/storage";
+import { getAllInvoices, fetchInvoices, deleteInvoice } from "@/lib/storage";
 import { Invoice } from "@/types/invoice";
 import { shareInvoiceToWhatsApp, exportMultipleInvoicesToExcel } from "@/lib/export";
+import SettingsModal from "@/components/SettingsModal";
 import {
   Plus,
   Trash2,
@@ -18,7 +19,7 @@ import {
   Share2,
   FileText,
   FileSpreadsheet,
-  LogOut,
+  Settings,
   Filter,
   ArrowUpDown,
   RefreshCw,
@@ -62,6 +63,7 @@ export default function DashboardPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const isFetchingRef = useRef(false);
 
@@ -492,20 +494,29 @@ export default function DashboardPage() {
                 <span className="whitespace-nowrap">Create Bill</span>
               </Link>
 
-              {/* Admin Logout */}
+              {/* Settings Menu Button */}
               <button
                 type="button"
-                onClick={() => logoutAdmin()}
-                title="Sign out of Admin"
-                className="inline-flex items-center gap-1 text-slate-500 hover:text-rose-600 hover:bg-rose-50 p-2 rounded-lg transition-colors border border-transparent hover:border-rose-200 shrink-0"
+                onClick={() => setShowSettingsModal(true)}
+                title="System Settings & Master Data"
+                className="inline-flex items-center gap-1.5 text-slate-700 hover:text-amber-600 hover:bg-amber-50 px-3 py-2 rounded-lg transition-colors border border-slate-200 hover:border-amber-300 font-bold text-xs shrink-0 shadow-2xs"
               >
-                <LogOut className="w-4 h-4" />
-                <span className="hidden md:inline text-xs font-semibold">Logout</span>
+                <Settings className="w-4 h-4 text-slate-500" />
+                <span className="hidden sm:inline">Settings</span>
               </button>
             </div>
           </div>
         </div>
       </header>
+
+      {/* ── SETTINGS MODAL ── */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        onSettingsChanged={() => {
+          liveSyncFromDB();
+        }}
+      />
 
       {/* ── MAIN CONTENT ── */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">

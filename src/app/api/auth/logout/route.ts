@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME } from "@/lib/auth";
+import { bumpAuthSessionVersion } from "@/lib/server-storage";
 
 export async function POST(req: NextRequest) {
+  const isAll = req.nextUrl.searchParams.get("all") === "true";
+
+  if (isAll) {
+    try {
+      await bumpAuthSessionVersion();
+    } catch (err) {
+      console.warn("Failed to bump auth session version on remote logout:", err);
+    }
+  }
+
   const response = NextResponse.json({
     success: true,
-    message: "Logged out successfully",
+    message: isAll ? "Logged out from all devices" : "Logged out successfully",
   });
 
   response.cookies.set({
@@ -36,4 +47,3 @@ export async function GET(req: NextRequest) {
 
   return response;
 }
-
