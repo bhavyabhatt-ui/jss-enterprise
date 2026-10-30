@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { getAllInvoices, fetchInvoices, deleteInvoice, logoutAdmin } from "@/lib/storage";
 import { Invoice } from "@/types/invoice";
-import { shareInvoiceToWhatsApp } from "@/lib/export";
+import { shareInvoiceToWhatsApp, exportMultipleInvoicesToExcel } from "@/lib/export";
 import {
   Plus,
   Trash2,
@@ -17,8 +17,8 @@ import {
   Calendar,
   Share2,
   FileText,
+  FileSpreadsheet,
   LogOut,
-  ShieldCheck,
   Filter,
   ArrowUpDown,
   RefreshCw,
@@ -27,18 +27,41 @@ import {
   CheckCircle2,
   X,
   PieChart,
+  CheckSquare,
+  Square,
+  CalendarRange,
 } from "lucide-react";
 
 type SortOption = "date_desc" | "date_asc" | "amount_desc" | "amount_asc" | "inv_asc" | "name_asc";
-type PeriodFilter = "all" | "this_month" | "last_month" | "this_year";
+type PeriodFilter = "all" | "this_month" | "last_month" | "this_year" | "custom";
+
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 export default function DashboardPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("date_desc");
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>("all");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+  const [filterYear, setFilterYear] = useState<string>("all");
+  const [filterMonth, setFilterMonth] = useState<string>("all");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [storageInfo, setStorageInfo] = useState<{ isCloud: boolean; name: string } | null>(null);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const isFetchingRef = useRef(false);
 
@@ -49,7 +72,7 @@ export default function DashboardPage() {
     }, 4500);
   };
 
-  // Live real-time fetch from Cloud Database
+  // Live real-time fetch from Cloud Database (Silently in Background)
   const liveSyncFromDB = async () => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
@@ -78,25 +101,17 @@ export default function DashboardPage() {
     // 1. Instant optimistic load from local cache
     setInvoices(getAllInvoices());
 
-    // 2. Fetch active storage status
-    fetch("/api/storage/status")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((info) => {
-        if (info) setStorageInfo(info);
-      })
-      .catch(() => {});
-
-    // 3. Immediate sync from Cloud Database
+    // 2. Immediate background sync from Cloud Database
     liveSyncFromDB();
 
-    // 4. Automatic LIVE polling every 2.5 seconds (zero refresh required across devices)
+    // 3. Automatic LIVE polling every 2.5 seconds in background
     const interval = setInterval(() => {
       if (typeof document !== "undefined" && !document.hidden) {
         liveSyncFromDB();
       }
     }, 2500);
 
-    // 5. Re-check instantly when window gains focus or tab becomes visible
+    // 4. Re-check instantly when window gains focus or tab becomes visible
     const handleVisibility = () => {
       if (typeof document !== "undefined" && !document.hidden) {
         liveSyncFromDB();
@@ -120,7 +135,6 @@ export default function DashboardPage() {
       if (!isNaN(d.getTime())) return d;
     }
     const raw = inv.invoiceInfo?.invoiceDate || "";
-    // Handle DD/MM/YYYY or YYYY-MM-DD
     const parts = raw.split(/[-/]/);
     if (parts.length === 3) {
       if (parts[0].length === 4) {
@@ -130,6 +144,18 @@ export default function DashboardPage() {
     }
     return new Date(0);
   };
+
+  // Available unique years from invoices for the Year dropdown
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    invoices.forEach((inv) => {
+      const d = parseInvoiceDate(inv);
+      if (!isNaN(d.getTime()) && d.getFullYear() > 2000) {
+        years.add(d.getFullYear().toString());
+      }
+    });
+    return Array.from(years).sort((a, b) => parseInt(b) - parseInt(a));
+  }, [invoices]);
 
   // Filtered and Sorted Invoices
   const filteredAndSorted = useMemo(() => {
@@ -155,34 +181,58 @@ export default function DashboardPage() {
       );
     });
 
-    // 2. Filter by Time Period
-    if (periodFilter !== "all") {
+    // 2. Filter by Year Dropdown
+    if (filterYear !== "all") {
       result = result.filter((inv) => {
         const d = parseInvoiceDate(inv);
-        if (isNaN(d.getTime())) return true;
-        const m = d.getMonth();
-        const y = d.getFullYear();
-
-        if (periodFilter === "this_month") {
-          return m === currentMonth && y === currentYear;
-        }
-        if (periodFilter === "last_month") {
-          const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-          const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-          return m === lastMonth && y === lastMonthYear;
-        }
-        if (periodFilter === "this_year") {
-          // Indian Financial Year: April 1 to March 31
-          const startYear = currentMonth >= 3 ? currentYear : currentYear - 1;
-          const fyStart = new Date(startYear, 3, 1);
-          const fyEnd = new Date(startYear + 1, 2, 31, 23, 59, 59);
-          return d >= fyStart && d <= fyEnd;
-        }
-        return true;
+        return d.getFullYear().toString() === filterYear;
       });
     }
 
-    // 3. Sort
+    // 3. Filter by Month Dropdown
+    if (filterMonth !== "all") {
+      result = result.filter((inv) => {
+        const d = parseInvoiceDate(inv);
+        return d.getMonth().toString() === filterMonth;
+      });
+    }
+
+    // 4. Filter by Period Preset or Custom Date Duration
+    if (periodFilter === "this_month") {
+      result = result.filter((inv) => {
+        const d = parseInvoiceDate(inv);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      });
+    } else if (periodFilter === "last_month") {
+      const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+      const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+      result = result.filter((inv) => {
+        const d = parseInvoiceDate(inv);
+        return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
+      });
+    } else if (periodFilter === "this_year") {
+      // Indian Financial Year: April 1 to March 31
+      const startYear = currentMonth >= 3 ? currentYear : currentYear - 1;
+      const fyStart = new Date(startYear, 3, 1);
+      const fyEnd = new Date(startYear + 1, 2, 31, 23, 59, 59);
+      result = result.filter((inv) => {
+        const d = parseInvoiceDate(inv);
+        return d >= fyStart && d <= fyEnd;
+      });
+    } else if (periodFilter === "custom") {
+      if (customStartDate) {
+        const start = new Date(customStartDate);
+        start.setHours(0, 0, 0, 0);
+        result = result.filter((inv) => parseInvoiceDate(inv) >= start);
+      }
+      if (customEndDate) {
+        const end = new Date(customEndDate);
+        end.setHours(23, 59, 59, 999);
+        result = result.filter((inv) => parseInvoiceDate(inv) <= end);
+      }
+    }
+
+    // 5. Sort
     result.sort((a, b) => {
       const dateA = parseInvoiceDate(a).getTime();
       const dateB = parseInvoiceDate(b).getTime();
@@ -212,7 +262,31 @@ export default function DashboardPage() {
     });
 
     return result;
-  }, [invoices, search, sortBy, periodFilter]);
+  }, [invoices, search, sortBy, periodFilter, filterYear, filterMonth, customStartDate, customEndDate]);
+
+  // Selected Invoices objects
+  const selectedInvoices = useMemo(() => {
+    return invoices.filter((inv) => selectedIds.includes(inv.id));
+  }, [invoices, selectedIds]);
+
+  // Selection handlers
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredAndSorted.length && filteredAndSorted.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredAndSorted.map((inv) => inv.id));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedIds([]);
+  };
 
   // Analytics Computations
   const analytics = useMemo(() => {
@@ -279,11 +353,11 @@ export default function DashboardPage() {
     };
   }, [invoices]);
 
-  // Handle Permanent Delete
+  // Handle Permanent Delete Single
   async function handleDelete(id: string, invoiceNo: string) {
     if (confirm(`Are you sure you want to permanently delete invoice ${invoiceNo || id} from database?`)) {
       setDeletingId(id);
-      // Instant optimistic UI update
+      setSelectedIds((prev) => prev.filter((i) => i !== id));
       setInvoices((prev) =>
         prev.filter((inv) => inv.id !== id && inv.invoiceInfo?.invoiceNo !== invoiceNo)
       );
@@ -300,6 +374,63 @@ export default function DashboardPage() {
       }
     }
   }
+
+  // Handle Bulk Delete
+  async function handleBulkDelete() {
+    if (selectedIds.length === 0) return;
+    if (
+      confirm(
+        `Are you sure you want to permanently delete ${selectedIds.length} selected bills from the database? This cannot be undone.`
+      )
+    ) {
+      setIsBulkDeleting(true);
+      const toDelete = [...selectedIds];
+      setSelectedIds([]);
+      // Optimistic update
+      setInvoices((prev) => prev.filter((inv) => !toDelete.includes(inv.id)));
+
+      try {
+        await Promise.all(toDelete.map((id) => deleteInvoice(id)));
+        showToast(`${toDelete.length} bills deleted permanently.`);
+      } catch (err) {
+        console.error("Bulk delete error:", err);
+        showToast("Error deleting some bills.", "error");
+      } finally {
+        setIsBulkDeleting(false);
+        const freshList = await fetchInvoices();
+        setInvoices(freshList);
+      }
+    }
+  }
+
+  // Handle Bulk Export to Excel
+  async function handleBulkExportExcel() {
+    if (selectedInvoices.length === 0) return;
+    try {
+      await exportMultipleInvoicesToExcel(selectedInvoices);
+      showToast(`Exported ${selectedInvoices.length} bills to Excel spreadsheet (.xlsx)!`);
+    } catch (err) {
+      console.error("Excel export error:", err);
+      showToast("Failed to generate Excel report.", "error");
+    }
+  }
+
+  const hasActiveFilters =
+    search.trim() !== "" ||
+    periodFilter !== "all" ||
+    filterYear !== "all" ||
+    filterMonth !== "all" ||
+    customStartDate !== "" ||
+    customEndDate !== "";
+
+  const clearAllFilters = () => {
+    setSearch("");
+    setPeriodFilter("all");
+    setFilterYear("all");
+    setFilterMonth("all");
+    setCustomStartDate("");
+    setCustomEndDate("");
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
@@ -375,42 +506,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </header>
-
-      {/* ── LIVE REAL-TIME STATUS SUB-BAR ── */}
-      <div className="bg-slate-100 border-b border-slate-200/60 px-4 py-2">
-        <div className="max-w-7xl mx-auto flex items-center justify-between text-xs text-slate-600 gap-2">
-          <div className="flex items-center gap-2 overflow-hidden truncate">
-            {/* Live Pulser Badge */}
-            <span className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[11px] font-semibold">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span>Live Synced ({storageInfo?.name || "Vercel Cloud Database"})</span>
-            </span>
-
-            <span className="hidden sm:inline text-slate-400">|</span>
-            <span className="hidden sm:inline-flex items-center gap-1 text-slate-500 text-[11px]">
-              <ShieldCheck className="w-3 h-3 text-amber-500" />
-              <span>Admin: <strong>adminjss</strong></span>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => liveSyncFromDB()}
-              className="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 text-[11px] font-medium"
-              title="Force sync now"
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span className="hidden sm:inline">Sync Now</span>
-            </button>
-            <span className="text-[11px] text-slate-400 font-medium hidden md:inline">
-              Auto-Updates Real Time across all devices
-            </span>
-          </div>
-        </div>
-      </div>
 
       {/* ── MAIN CONTENT ── */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -641,26 +736,25 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ── 3. INVOICE LIST PANEL WITH SEARCH, SORT, AND FILTERS ── */}
+        {/* ── 3. INVOICE LIST PANEL WITH MULTI-SELECT, SEARCH, SORT, AND DURATION FILTERS ── */}
         <div className="bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden">
           {/* Header Bar */}
-          <div className="p-4 sm:p-5 border-b border-slate-200/80 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between bg-slate-50/50">
-            <div>
-              <h2 className="text-slate-900 font-bold text-base flex items-center gap-2">
-                <span>Invoices &amp; Bills</span>
-                <span className="bg-amber-100 text-amber-800 text-[11px] font-bold px-2 py-0.5 rounded-full">
-                  {filteredAndSorted.length}
-                </span>
-              </h2>
-              <p className="text-slate-500 text-xs">
-                Manage, view, export, and share your bills live across all devices
-              </p>
-            </div>
+          <div className="p-4 sm:p-5 border-b border-slate-200/80 flex flex-col gap-4 bg-slate-50/50">
+            <div className="flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
+              <div>
+                <h2 className="text-slate-900 font-bold text-base flex items-center gap-2">
+                  <span>Invoices &amp; Bills</span>
+                  <span className="bg-amber-100 text-amber-800 text-[11px] font-bold px-2 py-0.5 rounded-full">
+                    {filteredAndSorted.length}
+                  </span>
+                </h2>
+                <p className="text-slate-500 text-xs">
+                  Select multiple bills to batch export to Excel, delete, or filter by custom dates
+                </p>
+              </div>
 
-            {/* Controls: Search, Sort By, Filter By */}
-            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
               {/* Search Box */}
-              <div className="relative flex-1 sm:w-64">
+              <div className="relative w-full md:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
@@ -678,8 +772,11 @@ export default function DashboardPage() {
                   </button>
                 )}
               </div>
+            </div>
 
-              {/* Period Filter Dropdown */}
+            {/* Filter and Sort Row */}
+            <div className="flex flex-wrap items-center gap-2.5 pt-1 border-t border-slate-200/60">
+              {/* Period Preset Dropdown */}
               <div className="relative">
                 <select
                   value={periodFilter}
@@ -690,8 +787,45 @@ export default function DashboardPage() {
                   <option value="this_month">This Month</option>
                   <option value="last_month">Last Month</option>
                   <option value="this_year">This Financial Year</option>
+                  <option value="custom">📅 Custom Date Duration</option>
                 </select>
                 <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              </div>
+
+              {/* Specific Year Selector */}
+              <div className="relative">
+                <select
+                  value={filterYear}
+                  onChange={(e) => setFilterYear(e.target.value)}
+                  className="appearance-none bg-white border border-slate-300 text-slate-700 text-xs rounded-lg pl-7 pr-8 py-2 font-medium focus:outline-none focus:border-amber-500 cursor-pointer shadow-2xs hover:bg-slate-50 transition-colors"
+                >
+                  <option value="all">All Years</option>
+                  {availableYears.map((yr) => (
+                    <option key={yr} value={yr}>
+                      {yr}
+                    </option>
+                  ))}
+                  {!availableYears.includes("2026") && <option value="2026">2026</option>}
+                  {!availableYears.includes("2025") && <option value="2025">2025</option>}
+                </select>
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+              </div>
+
+              {/* Specific Month Selector */}
+              <div className="relative">
+                <select
+                  value={filterMonth}
+                  onChange={(e) => setFilterMonth(e.target.value)}
+                  className="appearance-none bg-white border border-slate-300 text-slate-700 text-xs rounded-lg pl-7 pr-8 py-2 font-medium focus:outline-none focus:border-amber-500 cursor-pointer shadow-2xs hover:bg-slate-50 transition-colors"
+                >
+                  <option value="all">All Months</option>
+                  {MONTH_NAMES.map((name, idx) => (
+                    <option key={idx} value={idx.toString()}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               </div>
 
               {/* Sort By Dropdown */}
@@ -710,7 +844,116 @@ export default function DashboardPage() {
                 </select>
                 <ArrowUpDown className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               </div>
+
+              {/* Clear Filters Button */}
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  className="inline-flex items-center gap-1.5 text-rose-600 hover:text-rose-700 text-xs font-semibold border border-rose-200 bg-rose-50 hover:bg-rose-100 px-2.5 py-2 rounded-lg transition-colors ml-auto"
+                  title="Reset all active filters"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Clear Filters</span>
+                </button>
+              )}
             </div>
+
+            {/* Custom Date Range Duration Picker (Shown when periodFilter === 'custom') */}
+            {periodFilter === "custom" && (
+              <div className="flex flex-wrap items-center gap-3 p-3 bg-amber-50/70 border border-amber-200 rounded-lg text-xs animate-in fade-in">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                  <CalendarRange className="w-4 h-4 text-amber-600" />
+                  <span>Custom Duration:</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-600 font-medium">From:</span>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="px-2.5 py-1 bg-white border border-amber-300 rounded-md text-slate-800 text-xs focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-600 font-medium">To:</span>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="px-2.5 py-1 bg-white border border-amber-300 rounded-md text-slate-800 text-xs focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                {(customStartDate || customEndDate) && (
+                  <button
+                    onClick={() => {
+                      setCustomStartDate("");
+                      setCustomEndDate("");
+                    }}
+                    className="text-amber-800 hover:text-amber-900 underline text-[11px]"
+                  >
+                    Reset Dates
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* ── MULTI-SELECTION BULK ACTIONS BAR ── */}
+            {selectedIds.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-900 text-white rounded-xl shadow-md animate-in slide-in-from-top-2">
+                <div className="flex items-center gap-2.5">
+                  <span className="bg-amber-500 text-slate-950 font-black text-xs px-2.5 py-1 rounded-md">
+                    {selectedIds.length} {selectedIds.length === 1 ? "Bill" : "Bills"} Selected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    className="text-xs text-slate-300 hover:text-white underline"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Export Selected to Excel */}
+                  <button
+                    type="button"
+                    onClick={handleBulkExportExcel}
+                    className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors shadow-xs"
+                    title="Export all selected bills into a formatted Excel sheet"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>Export Excel (.xlsx)</span>
+                  </button>
+
+                  {/* Single selected quick edit */}
+                  {selectedIds.length === 1 && (
+                    <Link
+                      href={`/invoice/${selectedIds[0]}/edit`}
+                      className="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors shadow-xs"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      <span>Edit Bill</span>
+                    </Link>
+                  )}
+
+                  {/* Delete Selected */}
+                  <button
+                    type="button"
+                    onClick={handleBulkDelete}
+                    disabled={isBulkDeleting}
+                    className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors shadow-xs disabled:opacity-50"
+                  >
+                    {isBulkDeleting ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3.5 h-3.5" />
+                    )}
+                    <span>Delete Selected</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Table (Desktop) & Cards (Mobile) */}
@@ -721,20 +964,17 @@ export default function DashboardPage() {
               </div>
               <h3 className="text-slate-800 font-bold text-base">No Invoices Found</h3>
               <p className="text-slate-500 text-xs mt-1 mb-5 max-w-sm mx-auto">
-                {search || periodFilter !== "all"
+                {hasActiveFilters
                   ? "No bills matched your active filters. Try clearing filters or searching another keyword."
                   : "You haven't generated any bills yet. Click below to create your first invoice."}
               </p>
-              {search || periodFilter !== "all" ? (
+              {hasActiveFilters ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearch("");
-                    setPeriodFilter("all");
-                  }}
+                  onClick={clearAllFilters}
                   className="inline-flex items-center gap-1.5 text-amber-600 hover:text-amber-700 text-xs font-semibold border border-amber-300 bg-amber-50 px-3 py-1.5 rounded-lg transition-colors"
                 >
-                  Clear Filters
+                  Clear All Filters
                 </button>
               ) : (
                 <Link
@@ -749,79 +989,116 @@ export default function DashboardPage() {
             <div>
               {/* ── MOBILE CARDS VIEW ── */}
               <div className="block md:hidden divide-y divide-slate-100">
-                {filteredAndSorted.map((inv) => (
-                  <div
-                    key={inv.id}
-                    className={`p-4 hover:bg-slate-50/80 transition-all ${
-                      deletingId === inv.id ? "opacity-30 scale-98" : ""
-                    }`}
+                {/* Mobile Select All row */}
+                <div className="p-3 bg-slate-50 flex items-center justify-between text-xs text-slate-600">
+                  <button
+                    type="button"
+                    onClick={toggleSelectAll}
+                    className="flex items-center gap-2 font-semibold"
                   >
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <Link
-                        href={`/invoice/${inv.id}`}
-                        className="font-bold text-amber-600 hover:text-amber-700 text-sm hover:underline"
-                      >
-                        {inv.invoiceInfo?.invoiceNo || "INV-DRAFT"}
-                      </Link>
-                      <span className="text-[11px] text-slate-500 font-medium">
-                        {inv.invoiceInfo?.invoiceDate}
-                      </span>
-                    </div>
+                    {selectedIds.length === filteredAndSorted.length && filteredAndSorted.length > 0 ? (
+                      <CheckSquare className="w-4 h-4 text-amber-600" />
+                    ) : (
+                      <Square className="w-4 h-4 text-slate-400" />
+                    )}
+                    <span>Select All ({filteredAndSorted.length})</span>
+                  </button>
+                  {selectedIds.length > 0 && (
+                    <span className="font-bold text-amber-600">
+                      {selectedIds.length} selected
+                    </span>
+                  )}
+                </div>
 
-                    <div className="mb-2.5">
-                      <p className="font-semibold text-slate-900 text-xs">
-                        {inv.buyerDetails?.customerName || "Customer"}
-                      </p>
-                      <p className="text-slate-400 text-[11px] truncate">
-                        {inv.buyerDetails?.cityState || inv.buyerDetails?.address}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                      <div>
-                        <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
-                          Total Amount
-                        </span>
-                        <span className="font-bold text-slate-900 text-sm">
-                          ₹ {Number(inv.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                {filteredAndSorted.map((inv) => {
+                  const isSelected = selectedIds.includes(inv.id);
+                  return (
+                    <div
+                      key={inv.id}
+                      className={`p-4 transition-all ${
+                        isSelected ? "bg-amber-50/60" : "hover:bg-slate-50/80"
+                      } ${deletingId === inv.id ? "opacity-30 scale-98" : ""}`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => toggleSelect(inv.id)}
+                            className="text-slate-400 hover:text-amber-600"
+                          >
+                            {isSelected ? (
+                              <CheckSquare className="w-4 h-4 text-amber-600" />
+                            ) : (
+                              <Square className="w-4 h-4 text-slate-400" />
+                            )}
+                          </button>
+                          <Link
+                            href={`/invoice/${inv.id}`}
+                            className="font-bold text-amber-600 hover:text-amber-700 text-sm hover:underline"
+                          >
+                            {inv.invoiceInfo?.invoiceNo || "INV-DRAFT"}
+                          </Link>
+                        </div>
+                        <span className="text-[11px] text-slate-500 font-medium">
+                          {inv.invoiceInfo?.invoiceDate}
                         </span>
                       </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex items-center gap-1.5">
-                        <Link
-                          href={`/invoice/${inv.id}`}
-                          className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
-                        >
-                          View
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => shareInvoiceToWhatsApp(inv)}
-                          className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors"
-                          title="Share on WhatsApp with Details"
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                        </button>
-                        <Link
-                          href={`/invoice/${inv.id}/edit`}
-                          className="p-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-md transition-colors"
-                          title="Edit Bill"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(inv.id, inv.invoiceInfo?.invoiceNo)}
-                          className="p-1.5 text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-md transition-colors"
-                          title="Delete Bill"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      <div className="mb-2.5 pl-6.5">
+                        <p className="font-semibold text-slate-900 text-xs">
+                          {inv.buyerDetails?.customerName || "Customer"}
+                        </p>
+                        <p className="text-slate-400 text-[11px] truncate">
+                          {inv.buyerDetails?.cityState || inv.buyerDetails?.address}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 pl-6.5">
+                        <div>
+                          <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
+                            Total Amount
+                          </span>
+                          <span className="font-bold text-slate-900 text-sm">
+                            ₹ {Number(inv.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-1.5">
+                          <Link
+                            href={`/invoice/${inv.id}`}
+                            className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
+                          >
+                            View
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => shareInvoiceToWhatsApp(inv)}
+                            className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-md transition-colors"
+                            title="Share on WhatsApp with Details"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                          </button>
+                          <Link
+                            href={`/invoice/${inv.id}/edit`}
+                            className="p-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-md transition-colors"
+                            title="Edit Bill"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(inv.id, inv.invoiceInfo?.invoiceNo)}
+                            className="p-1.5 text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-md transition-colors"
+                            title="Delete Bill"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* ── DESKTOP TABLE VIEW ── */}
@@ -829,7 +1106,22 @@ export default function DashboardPage() {
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50/60 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
-                      <th className="px-4 sm:px-6 py-3">Invoice No</th>
+                      {/* Checkbox All */}
+                      <th className="px-4 py-3 w-10 text-center">
+                        <button
+                          type="button"
+                          onClick={toggleSelectAll}
+                          className="text-slate-400 hover:text-amber-600 flex items-center justify-center mx-auto"
+                          title="Select / Deselect All Filtered Bills"
+                        >
+                          {selectedIds.length === filteredAndSorted.length && filteredAndSorted.length > 0 ? (
+                            <CheckSquare className="w-4 h-4 text-amber-600" />
+                          ) : (
+                            <Square className="w-4 h-4 text-slate-400" />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-4 py-3">Invoice No</th>
                       <th className="px-4 py-3">Customer / Buyer</th>
                       <th className="px-4 py-3">Date</th>
                       <th className="px-4 py-3 text-right">Taxable Amount</th>
@@ -838,90 +1130,108 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredAndSorted.map((inv) => (
-                      <tr
-                        key={inv.id}
-                        className={`hover:bg-slate-50/80 transition-all ${
-                          deletingId === inv.id ? "opacity-30 scale-98" : ""
-                        }`}
-                      >
-                        {/* Invoice No */}
-                        <td className="px-4 sm:px-6 py-3.5">
-                          <Link
-                            href={`/invoice/${inv.id}`}
-                            className="font-bold text-amber-600 hover:text-amber-700 hover:underline inline-flex items-center gap-1.5"
-                          >
-                            <span>{inv.invoiceInfo?.invoiceNo || "INV-DRAFT"}</span>
-                          </Link>
-                        </td>
+                    {filteredAndSorted.map((inv) => {
+                      const isSelected = selectedIds.includes(inv.id);
+                      return (
+                        <tr
+                          key={inv.id}
+                          className={`transition-all ${
+                            isSelected ? "bg-amber-50/60" : "hover:bg-slate-50/80"
+                          } ${deletingId === inv.id ? "opacity-30 scale-98" : ""}`}
+                        >
+                          {/* Row Checkbox */}
+                          <td className="px-4 py-3.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => toggleSelect(inv.id)}
+                              className="text-slate-400 hover:text-amber-600 flex items-center justify-center mx-auto"
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="w-4 h-4 text-amber-600" />
+                              ) : (
+                                <Square className="w-4 h-4 text-slate-400" />
+                              )}
+                            </button>
+                          </td>
 
-                        {/* Customer */}
-                        <td className="px-4 py-3.5">
-                          <p className="font-semibold text-slate-900">
-                            {inv.buyerDetails?.customerName || "Customer"}
-                          </p>
-                          <p className="text-slate-400 text-[11px] truncate max-w-xs">
-                            {inv.buyerDetails?.cityState || inv.buyerDetails?.address}
-                          </p>
-                        </td>
-
-                        {/* Date */}
-                        <td className="px-4 py-3.5 text-slate-600 font-medium">
-                          {inv.invoiceInfo?.invoiceDate}
-                        </td>
-
-                        {/* Taxable Amount */}
-                        <td className="px-4 py-3.5 text-right font-medium text-slate-600">
-                          ₹ {Number(inv.subTotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                        </td>
-
-                        {/* Grand Total */}
-                        <td className="px-4 py-3.5 text-right font-bold text-slate-900">
-                          ₹ {Number(inv.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                        </td>
-
-                        {/* Actions */}
-                        <td className="px-4 sm:px-6 py-3.5">
-                          <div className="flex items-center justify-center gap-1">
-                            {/* View */}
+                          {/* Invoice No */}
+                          <td className="px-4 py-3.5">
                             <Link
                               href={`/invoice/${inv.id}`}
-                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                              title="View & Export Bill"
+                              className="font-bold text-amber-600 hover:text-amber-700 hover:underline inline-flex items-center gap-1.5"
                             >
-                              <Eye className="w-4 h-4" />
+                              <span>{inv.invoiceInfo?.invoiceNo || "INV-DRAFT"}</span>
                             </Link>
+                          </td>
 
-                            {/* WhatsApp */}
-                            <button
-                              onClick={() => shareInvoiceToWhatsApp(inv)}
-                              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
-                              title="Share on WhatsApp with Details"
-                            >
-                              <Share2 className="w-4 h-4" />
-                            </button>
+                          {/* Customer */}
+                          <td className="px-4 py-3.5">
+                            <p className="font-semibold text-slate-900">
+                              {inv.buyerDetails?.customerName || "Customer"}
+                            </p>
+                            <p className="text-slate-400 text-[11px] truncate max-w-xs">
+                              {inv.buyerDetails?.cityState || inv.buyerDetails?.address}
+                            </p>
+                          </td>
 
-                            {/* Edit */}
-                            <Link
-                              href={`/invoice/${inv.id}/edit`}
-                              className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
-                              title="Edit Bill"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Link>
+                          {/* Date */}
+                          <td className="px-4 py-3.5 text-slate-600 font-medium">
+                            {inv.invoiceInfo?.invoiceDate}
+                          </td>
 
-                            {/* Delete */}
-                            <button
-                              onClick={() => handleDelete(inv.id, inv.invoiceInfo?.invoiceNo)}
-                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                              title="Delete Bill"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          {/* Taxable Amount */}
+                          <td className="px-4 py-3.5 text-right font-medium text-slate-600">
+                            ₹ {Number(inv.subTotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+
+                          {/* Grand Total */}
+                          <td className="px-4 py-3.5 text-right font-bold text-slate-900">
+                            ₹ {Number(inv.grandTotal).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </td>
+
+                          {/* Actions */}
+                          <td className="px-4 sm:px-6 py-3.5">
+                            <div className="flex items-center justify-center gap-1">
+                              {/* View */}
+                              <Link
+                                href={`/invoice/${inv.id}`}
+                                className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                title="View & Export Bill"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Link>
+
+                              {/* WhatsApp */}
+                              <button
+                                onClick={() => shareInvoiceToWhatsApp(inv)}
+                                className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                                title="Share on WhatsApp with Details"
+                              >
+                                <Share2 className="w-4 h-4" />
+                              </button>
+
+                              {/* Edit */}
+                              <Link
+                                href={`/invoice/${inv.id}/edit`}
+                                className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
+                                title="Edit Bill"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Link>
+
+                              {/* Delete */}
+                              <button
+                                onClick={() => handleDelete(inv.id, inv.invoiceInfo?.invoiceNo)}
+                                className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                                title="Delete Bill"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

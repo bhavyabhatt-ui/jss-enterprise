@@ -744,3 +744,153 @@ export async function shareInvoiceToWhatsApp(
 
   window.open(url, "_blank");
 }
+
+/**
+ * Export single invoice to Microsoft Excel (.xlsx) spreadsheet
+ */
+export async function exportInvoiceToExcel(invoice: Invoice): Promise<void> {
+  const XLSX = await import("xlsx");
+  const wb = XLSX.utils.book_new();
+
+  const cleanNo = (invoice.invoiceInfo?.invoiceNo || "Invoice").replace(/[/\\?%*:|"<>]/g, "-");
+
+  const headerData: any[][] = [
+    ["JSS ENTERPRISE - TAX INVOICE"],
+    ["Precision | Power | Progress"],
+    [""],
+    ["INVOICE DETAILS", "", "BUYER DETAILS", ""],
+    ["Invoice No:", invoice.invoiceInfo?.invoiceNo || "", "Customer Name:", invoice.buyerDetails?.customerName || ""],
+    ["Invoice Date:", invoice.invoiceInfo?.invoiceDate || "", "Address:", invoice.buyerDetails?.address || ""],
+    ["Place of Supply:", invoice.invoiceInfo?.placeOfSupply || "", "City / State:", invoice.buyerDetails?.cityState || ""],
+    ["Challan No:", invoice.invoiceInfo?.challanNo || "", "GSTIN / PAN:", invoice.buyerDetails?.gstinPan || ""],
+    ["PO Date & No:", invoice.invoiceInfo?.poDateNo || "", "Contact No:", invoice.buyerDetails?.contactNo || ""],
+    [""],
+    ["S.No", "Description of Goods / Services", "HSN/SAC", "Qty", "Unit", "Rate (₹)", "Amount (₹)"],
+  ];
+
+  (invoice.items || []).forEach((item, idx) => {
+    headerData.push([
+      idx + 1,
+      item.description + (item.specifications ? ` - ${item.specifications}` : ""),
+      item.hsnSac || "-",
+      Number(item.qty) || 0,
+      item.unit || "Nos",
+      Number(item.rate) || 0,
+      Number(item.amount) || 0,
+    ]);
+  });
+
+  headerData.push(
+    [""],
+    ["", "", "", "", "", "Taxable Subtotal (₹):", Number(invoice.subTotal) || 0],
+    ["", "", "", "", "", `CGST @ ${invoice.taxDetails?.cgst || 0}% (₹):`, Number(invoice.cgstAmount) || 0],
+    ["", "", "", "", "", `SGST @ ${invoice.taxDetails?.sgst || 0}% (₹):`, Number(invoice.sgstAmount) || 0],
+    ["", "", "", "", "", `IGST @ ${invoice.taxDetails?.igst || 0}% (₹):`, Number(invoice.igstAmount) || 0],
+    ["", "", "", "", "", "Grand Total (₹):", Number(invoice.grandTotal) || 0],
+    ["", "", "", "", "", "Amount in Words:", invoice.amountInWords || ""],
+    [""],
+    ["BANK DETAILS", "", "", "TERMS & CONDITIONS", "", ""],
+    ["Bank Name:", invoice.bankDetails?.bankName || "", "", invoice.termsAndConditions || "", "", ""],
+    ["Account Holder:", invoice.bankDetails?.accountHolder || "", "", "", "", ""],
+    ["Account No:", invoice.bankDetails?.accountNo || "", "", "", "", ""],
+    ["IFSC Code:", invoice.bankDetails?.ifscCode || "", "", "", "", ""],
+    ["Branch:", invoice.bankDetails?.branch || "", "", "", "", ""]
+  );
+
+  const ws = XLSX.utils.aoa_to_sheet(headerData);
+  ws["!cols"] = [
+    { wch: 8 },
+    { wch: 38 },
+    { wch: 14 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 22 },
+    { wch: 22 },
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, "Tax Invoice");
+  XLSX.writeFile(wb, `Invoice-${cleanNo}.xlsx`);
+}
+
+/**
+ * Export multiple selected invoices to Microsoft Excel (.xlsx) report
+ */
+export async function exportMultipleInvoicesToExcel(invoices: Invoice[]): Promise<void> {
+  const XLSX = await import("xlsx");
+  const wb = XLSX.utils.book_new();
+
+  // 1. Invoices Overview Sheet
+  const rows = invoices.map((inv, idx) => ({
+    "S.No": idx + 1,
+    "Invoice No": inv.invoiceInfo?.invoiceNo || "DRAFT",
+    "Date": inv.invoiceInfo?.invoiceDate || "",
+    "Customer / Buyer": inv.buyerDetails?.customerName || "",
+    "Buyer City/State": inv.buyerDetails?.cityState || "",
+    "Buyer GSTIN": inv.buyerDetails?.gstinPan || "",
+    "Buyer Contact": inv.buyerDetails?.contactNo || "",
+    "Taxable Amount (₹)": Number(inv.subTotal) || 0,
+    "CGST (₹)": Number(inv.cgstAmount) || 0,
+    "SGST (₹)": Number(inv.sgstAmount) || 0,
+    "IGST (₹)": Number(inv.igstAmount) || 0,
+    "Grand Total (₹)": Number(inv.grandTotal) || 0,
+    "Place of Supply": inv.invoiceInfo?.placeOfSupply || "",
+  }));
+
+  const wsSummary = XLSX.utils.json_to_sheet(rows);
+  wsSummary["!cols"] = [
+    { wch: 6 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 28 },
+    { wch: 20 },
+    { wch: 18 },
+    { wch: 15 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 18 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsSummary, "Invoices Summary");
+
+  // 2. Line Items Detail Sheet
+  const itemRows: any[] = [];
+  invoices.forEach((inv) => {
+    (inv.items || []).forEach((item, itemIdx) => {
+      itemRows.push({
+        "Invoice No": inv.invoiceInfo?.invoiceNo || "DRAFT",
+        "Invoice Date": inv.invoiceInfo?.invoiceDate || "",
+        "Customer Name": inv.buyerDetails?.customerName || "",
+        "Item #": itemIdx + 1,
+        "Description": item.description,
+        "Specifications": item.specifications || "",
+        "HSN / SAC": item.hsnSac || "",
+        "Quantity": Number(item.qty) || 0,
+        "Unit": item.unit || "Nos",
+        "Rate (₹)": Number(item.rate) || 0,
+        "Line Amount (₹)": Number(item.amount) || 0,
+      });
+    });
+  });
+
+  const wsItems = XLSX.utils.json_to_sheet(itemRows);
+  wsItems["!cols"] = [
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 26 },
+    { wch: 8 },
+    { wch: 30 },
+    { wch: 24 },
+    { wch: 14 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 16 },
+  ];
+  XLSX.utils.book_append_sheet(wb, wsItems, "Items Breakdown");
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  XLSX.writeFile(wb, `JSS-Invoices-Report-${todayStr}.xlsx`);
+}
+

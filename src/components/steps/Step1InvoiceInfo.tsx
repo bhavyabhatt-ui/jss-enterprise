@@ -1,7 +1,6 @@
 "use client";
 
 import { InvoiceInfo } from "@/types/invoice";
-import { HEADER_IMAGE_BASE64 } from "@/lib/assets";
 
 interface Props {
   data: InvoiceInfo;
@@ -48,18 +47,6 @@ export default function Step1InvoiceInfo({ data, onChange }: Props) {
       <div className="mb-5 pb-4 border-b border-slate-100">
         <h3 className="text-base font-bold text-slate-900">Step 1: Invoice Information</h3>
         <p className="text-slate-500 text-xs mt-0.5">Specify basic billing number, date, and supply details</p>
-      </div>
-
-      {/* Bill Header Preview */}
-      <div className="mb-6 rounded-xl overflow-hidden border border-slate-200 shadow-xs bg-[#1e2329]">
-        <div className="bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600 border-b border-slate-200">
-          Official Bill Header (Applied to All Invoices)
-        </div>
-        <img
-          src={HEADER_IMAGE_BASE64}
-          alt="JSS Enterprise Header Banner"
-          className="w-full object-contain max-h-[140px]"
-        />
       </div>
 
       {/* Fields */}

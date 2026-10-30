@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getInvoiceById, fetchInvoiceById, logoutAdmin } from "@/lib/storage";
-import { exportToPDF, exportToImage, exportToWord, shareInvoiceToWhatsApp, printInvoice } from "@/lib/export";
+import { exportToPDF, exportToImage, exportInvoiceToExcel, shareInvoiceToWhatsApp, printInvoice } from "@/lib/export";
 import { Invoice } from "@/types/invoice";
 import ResponsiveInvoiceViewer from "@/components/ResponsiveInvoiceViewer";
 import Link from "next/link";
@@ -12,7 +12,7 @@ import {
   Edit,
   FileImage,
   FileText,
-  FileType,
+  FileSpreadsheet,
   Printer,
   Loader2,
   Check,
@@ -20,7 +20,7 @@ import {
   LogOut,
 } from "lucide-react";
 
-type ExportType = "pdf" | "image" | "word" | "whatsapp" | "print" | null;
+type ExportType = "pdf" | "image" | "excel" | "whatsapp" | "print" | null;
 
 export default function InvoiceViewPage() {
   const params = useParams();
@@ -65,9 +65,9 @@ export default function InvoiceViewPage() {
       } else if (type === "image") {
         await exportToImage("invoice-print-area", filename);
         showToast("PNG Image downloaded successfully!");
-      } else if (type === "word") {
-        await exportToWord(invoice);
-        showToast("Word document (.docx) downloaded!");
+      } else if (type === "excel") {
+        await exportInvoiceToExcel(invoice);
+        showToast("Excel spreadsheet (.xlsx) downloaded successfully!");
       } else if (type === "whatsapp") {
         await shareInvoiceToWhatsApp(invoice, "invoice-print-area");
         showToast("Opening share dialog with attached PDF & bill details...");
@@ -185,19 +185,19 @@ export default function InvoiceViewPage() {
                 <span>PNG</span>
               </button>
 
-              {/* Word */}
+              {/* Excel */}
               <button
-                onClick={() => handleExport("word")}
+                onClick={() => handleExport("excel")}
                 disabled={!!exporting}
-                className="flex items-center justify-center gap-1 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
-                title="Download Word (.docx) with top image"
+                className="flex items-center justify-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+                title="Download Excel spreadsheet (.xlsx)"
               >
-                {exporting === "word" ? (
+                {exporting === "excel" ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <FileType className="w-3.5 h-3.5 text-slate-600" />
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
                 )}
-                <span>Word</span>
+                <span>Excel</span>
               </button>
             </div>
 
@@ -303,19 +303,19 @@ export default function InvoiceViewPage() {
                 <span>Image</span>
               </button>
 
-              {/* Word Export */}
+              {/* Excel Export */}
               <button
-                onClick={() => handleExport("word")}
+                onClick={() => handleExport("excel")}
                 disabled={!!exporting}
-                className="flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
-                title="Download Word (.docx) with top image"
+                className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
+                title="Download Excel spreadsheet (.xlsx)"
               >
-                {exporting === "word" ? (
+                {exporting === "excel" ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <FileType className="w-3.5 h-3.5 text-slate-600" />
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
                 )}
-                <span>Word (.docx)</span>
+                <span>Excel (.xlsx)</span>
               </button>
 
               {/* Edit */}
