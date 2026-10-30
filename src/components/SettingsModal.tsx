@@ -198,13 +198,12 @@ export default function SettingsModal({ isOpen, onClose, onSettingsChanged }: Pr
 
     pastInvoices.forEach((inv) => {
       (inv.items || []).forEach((item) => {
-        const key = item.description.trim().toLowerCase();
+        const key = item.description?.trim().toLowerCase();
         if (key && !seen.has(key)) {
           seen.add(key);
           extracted.push({
             id: uuidv4(),
-            code: `PROD-${extracted.length + 1}`,
-            description: item.description,
+            description: item.description.trim(),
             specifications: item.specifications || "",
             hsnSac: item.hsnSac || "",
             unit: item.unit || "Nos",
@@ -726,7 +725,6 @@ export default function SettingsModal({ isOpen, onClose, onSettingsChanged }: Pr
                             onClick={() => {
                               setEditingProduct({
                                 id: uuidv4(),
-                                code: `ITEM-${settings.productCatalog.length + 1}`,
                                 description: "",
                                 specifications: "",
                                 hsnSac: "",
@@ -763,7 +761,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsChanged }: Pr
                           <table className="w-full text-left text-xs">
                             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase text-[10px]">
                               <tr>
-                                <th className="px-3.5 py-2.5">Code</th>
+                                <th className="px-3.5 py-2.5 w-10 text-center">#</th>
                                 <th className="px-3.5 py-2.5">Description &amp; Specifications</th>
                                 <th className="px-3.5 py-2.5">HSN/SAC</th>
                                 <th className="px-3.5 py-2.5">Unit</th>
@@ -772,10 +770,10 @@ export default function SettingsModal({ isOpen, onClose, onSettingsChanged }: Pr
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                              {settings.productCatalog.map((prod) => (
+                              {settings.productCatalog.map((prod, pIdx) => (
                                 <tr key={prod.id} className="hover:bg-slate-50/80">
-                                  <td className="px-3.5 py-2.5 font-bold font-mono text-amber-600">
-                                    {prod.code}
+                                  <td className="px-3.5 py-2.5 text-center text-slate-400 font-semibold">
+                                    {pIdx + 1}
                                   </td>
                                   <td className="px-3.5 py-2.5">
                                     <p className="font-semibold text-slate-900">{prod.description}</p>
@@ -785,7 +783,7 @@ export default function SettingsModal({ isOpen, onClose, onSettingsChanged }: Pr
                                       </p>
                                     )}
                                   </td>
-                                  <td className="px-3.5 py-2.5 text-slate-600">{prod.hsnSac || "-"}</td>
+                                  <td className="px-3.5 py-2.5 text-slate-600 font-mono font-medium">{prod.hsnSac || "-"}</td>
                                   <td className="px-3.5 py-2.5 text-slate-600">{prod.unit}</td>
                                   <td className="px-3.5 py-2.5 text-right font-bold text-slate-900">
                                     ₹{Number(prod.rate).toLocaleString("en-IN")}
@@ -835,39 +833,9 @@ export default function SettingsModal({ isOpen, onClose, onSettingsChanged }: Pr
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
-                        <div>
-                          <label className="block text-slate-700 font-semibold mb-1">
-                            Item Code / SKU *
-                          </label>
-                          <input
-                            type="text"
-                            value={editingProduct.code}
-                            onChange={(e) =>
-                              setEditingProduct({ ...editingProduct, code: e.target.value })
-                            }
-                            placeholder="e.g. JSS-101"
-                            className="w-full px-3 py-2 border rounded-lg font-mono"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-slate-700 font-semibold mb-1">
-                            HSN / SAC Code
-                          </label>
-                          <input
-                            type="text"
-                            value={editingProduct.hsnSac}
-                            onChange={(e) =>
-                              setEditingProduct({ ...editingProduct, hsnSac: e.target.value })
-                            }
-                            placeholder="e.g. 8466"
-                            className="w-full px-3 py-2 border rounded-lg"
-                          />
-                        </div>
-
                         <div className="sm:col-span-2">
                           <label className="block text-slate-700 font-semibold mb-1">
-                            Item Description *
+                            Product / Item Name *
                           </label>
                           <input
                             type="text"
@@ -875,26 +843,23 @@ export default function SettingsModal({ isOpen, onClose, onSettingsChanged }: Pr
                             onChange={(e) =>
                               setEditingProduct({ ...editingProduct, description: e.target.value })
                             }
-                            placeholder="e.g. Industrial Valve Assembly"
-                            className="w-full px-3 py-2 border rounded-lg"
+                            placeholder="e.g. JEANS, T SHIRT, Industrial Valve"
+                            className="w-full px-3 py-2 border rounded-lg font-medium"
                           />
                         </div>
 
-                        <div className="sm:col-span-2">
+                        <div>
                           <label className="block text-slate-700 font-semibold mb-1">
-                            Detailed Specifications
+                            HSN / SAC Code *
                           </label>
-                          <textarea
-                            rows={2}
-                            value={editingProduct.specifications}
+                          <input
+                            type="text"
+                            value={editingProduct.hsnSac}
                             onChange={(e) =>
-                              setEditingProduct({
-                                ...editingProduct,
-                                specifications: e.target.value,
-                              })
+                              setEditingProduct({ ...editingProduct, hsnSac: e.target.value })
                             }
-                            placeholder="e.g. Stainless steel 316, pressure rating 300 PSI"
-                            className="w-full px-3 py-2 border rounded-lg"
+                            placeholder="e.g. 1510, 8466"
+                            className="w-full px-3 py-2 border rounded-lg font-mono"
                           />
                         </div>
 
@@ -925,6 +890,24 @@ export default function SettingsModal({ isOpen, onClose, onSettingsChanged }: Pr
                               })
                             }
                             placeholder="0.00"
+                            className="w-full px-3 py-2 border rounded-lg"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label className="block text-slate-700 font-semibold mb-1">
+                            Detailed Specifications
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={editingProduct.specifications}
+                            onChange={(e) =>
+                              setEditingProduct({
+                                ...editingProduct,
+                                specifications: e.target.value,
+                              })
+                            }
+                            placeholder="e.g. Size, dimensions, color, technical details"
                             className="w-full px-3 py-2 border rounded-lg"
                           />
                         </div>

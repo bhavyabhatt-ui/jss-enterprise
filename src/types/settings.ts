@@ -9,7 +9,7 @@ export interface CompanyProfile {
 
 export interface CatalogProduct {
   id: string;
-  code: string; // e.g. "ITEM-001"
+  code?: string;
   description: string;
   specifications: string;
   hsnSac: string;

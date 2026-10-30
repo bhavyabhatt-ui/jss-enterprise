@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { InvoiceItem, TaxDetails } from "@/types/invoice";
 import { Plus, Trash2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
-import { getAllInvoices, getInvoiceRecommendations } from "@/lib/storage";
 import { getStoredSettings, fetchSettings } from "@/lib/settings-storage";
 
 interface Props {
@@ -20,7 +19,6 @@ interface Props {
 }
 
 export type ItemTemplate = {
-  code?: string;
   description: string;
   specifications: string;
   hsnSac: string;
@@ -45,46 +43,45 @@ export default function Step3Items({
   const [itemRecommendations, setItemRecommendations] = useState<ItemTemplate[]>([]);
 
   const loadTemplates = useCallback(() => {
-    const historical = getAllInvoices();
-    const { items: recItems } = getInvoiceRecommendations(historical);
-
     const s = getStoredSettings();
-    const catalogItems: ItemTemplate[] = (s.productCatalog || []).map((p) => ({
-      code: p.code,
-      description: p.description,
-      specifications: p.specifications,
-      hsnSac: p.hsnSac,
-      unit: p.unit,
-      rate: p.rate,
-    }));
+    const seen = new Set<string>();
+    const catalogItems: ItemTemplate[] = [];
 
-    // Catalog items first, then historical
-    const combined: ItemTemplate[] = [...catalogItems];
-    recItems.forEach((rec) => {
-      if (!combined.some((c) => c.description.toLowerCase() === rec.description.toLowerCase())) {
-        combined.push({ ...rec, code: "" });
+    // Master Product Catalog is the single source of truth - strictly deduplicated by product name
+    for (const p of s.productCatalog || []) {
+      const key = (p.description || "").trim().toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        catalogItems.push({
+          description: p.description.trim(),
+          specifications: p.specifications || "",
+          hsnSac: p.hsnSac || "",
+          unit: p.unit || "Nos",
+          rate: Number(p.rate) || 0,
+        });
       }
-    });
+    }
 
-    setItemRecommendations(combined);
+    setItemRecommendations(catalogItems);
 
     fetchSettings().then((cloudSettings) => {
       if (cloudSettings.productCatalog && cloudSettings.productCatalog.length > 0) {
-        const cloudItems: ItemTemplate[] = cloudSettings.productCatalog.map((p) => ({
-          code: p.code,
-          description: p.description,
-          specifications: p.specifications,
-          hsnSac: p.hsnSac,
-          unit: p.unit,
-          rate: p.rate,
-        }));
-        const reMerged: ItemTemplate[] = [...cloudItems];
-        combined.forEach((item) => {
-          if (!reMerged.some((m) => m.description.toLowerCase() === item.description.toLowerCase())) {
-            reMerged.push(item);
+        const cloudSeen = new Set<string>();
+        const cloudItems: ItemTemplate[] = [];
+        for (const p of cloudSettings.productCatalog) {
+          const key = (p.description || "").trim().toLowerCase();
+          if (key && !cloudSeen.has(key)) {
+            cloudSeen.add(key);
+            cloudItems.push({
+              description: p.description.trim(),
+              specifications: p.specifications || "",
+              hsnSac: p.hsnSac || "",
+              unit: p.unit || "Nos",
+              rate: Number(p.rate) || 0,
+            });
           }
-        });
-        setItemRecommendations(reMerged);
+        }
+        setItemRecommendations(cloudItems);
       }
     });
   }, []);
@@ -168,7 +165,7 @@ export default function Step3Items({
         <div>
           <h3 className="text-base font-bold text-slate-900">Step 3: Item Description &amp; Specifications</h3>
           <p className="text-slate-500 text-xs mt-0.5">
-            Type any product name to see suggestions from your catalog. New products are automatically saved to your catalog.
+            Type any product name or HSN code to select from your catalog. New products are automatically saved to your catalog.
           </p>
         </div>
         <button
@@ -202,7 +199,7 @@ export default function Step3Items({
                 ? itemRecommendations.filter(
                     (r) =>
                       r.description.toLowerCase().includes(q) ||
-                      (r.code && r.code.toLowerCase().includes(q))
+                      (r.hsnSac && r.hsnSac.toLowerCase().includes(q))
                   )
                 : [];
 
@@ -233,7 +230,7 @@ export default function Step3Items({
                       className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded text-slate-600 placeholder-slate-400 text-[11px] focus:outline-none focus:border-amber-500"
                     />
 
-                    {/* Clean Floating Suggestions Dropdown */}
+                    {/* Clean Floating Suggestions Dropdown (NO duplicates, NO item codes) */}
                     {activeItemId === item.id && matches.length > 0 && (
                       <div className="absolute left-3 right-3 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-slate-100">
                         {matches.slice(0, 6).map((rec, rIdx) => (
@@ -247,18 +244,15 @@ export default function Step3Items({
                           >
                             <div className="min-w-0 pr-2">
                               <div className="font-bold text-slate-900 truncate">
-                                {rec.code && (
-                                  <span className="text-amber-600 font-mono text-[11px] mr-1.5 font-bold">
-                                    [{rec.code}]
-                                  </span>
-                                )}
                                 {rec.description}
                               </div>
                               <div className="text-[11px] text-slate-500 mt-0.5 truncate">
-                                {rec.specifications ? `${rec.specifications} • ` : ""}HSN: {rec.hsnSac || "-"} • {rec.unit} • ₹{Number(rec.rate).toLocaleString("en-IN")}
+                                HSN/SAC: <span className="font-semibold text-slate-700">{rec.hsnSac || "-"}</span>
+                                {rec.specifications ? ` • ${rec.specifications}` : ""}
+                                {` • ${rec.unit} • ₹${Number(rec.rate).toLocaleString("en-IN")}`}
                               </div>
                             </div>
-                            <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded shrink-0">
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2.5 py-1 rounded shrink-0">
                               Select
                             </span>
                           </div>
@@ -337,7 +331,7 @@ export default function Step3Items({
             ? itemRecommendations.filter(
                 (r) =>
                   r.description.toLowerCase().includes(q) ||
-                  (r.code && r.code.toLowerCase().includes(q))
+                  (r.hsnSac && r.hsnSac.toLowerCase().includes(q))
               )
             : [];
 
@@ -385,7 +379,7 @@ export default function Step3Items({
                         <div>
                           <div className="font-bold text-slate-900">{rec.description}</div>
                           <div className="text-[10px] text-slate-500">
-                            {rec.specifications ? `${rec.specifications} • ` : ""}₹{rec.rate} • HSN: {rec.hsnSac || "-"}
+                            HSN/SAC: {rec.hsnSac || "-"} {rec.specifications ? `• ${rec.specifications}` : ""} • ₹{rec.rate}
                           </div>
                         </div>
                         <span className="text-[10px] bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded">

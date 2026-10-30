@@ -146,25 +146,40 @@ export async function restoreSystemBackupFromFile(
 
 /**
  * Automatically add any items not already in the product catalog
+ * Uses only Product Name + HSN/SAC without any internal item codes.
  */
 export async function syncNewItemsToCatalog(items: InvoiceItem[]): Promise<CatalogProduct[]> {
   const currentSettings = getStoredSettings();
-  const catalog = [...(currentSettings.productCatalog || [])];
+  const catalog: CatalogProduct[] = [];
+  const seen = new Set<string>();
+
+  // Clean existing catalog of any duplicate descriptions
+  for (const p of currentSettings.productCatalog || []) {
+    const key = p.description.trim().toLowerCase();
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      catalog.push({
+        id: p.id || uuidv4(),
+        description: p.description.trim(),
+        specifications: p.specifications?.trim() || "",
+        hsnSac: p.hsnSac?.trim() || "",
+        unit: p.unit || "Nos",
+        rate: Number(p.rate) || 0,
+      });
+    }
+  }
+
   let changed = false;
 
   for (const item of items) {
     const desc = item.description?.trim();
     if (!desc) continue;
+    const key = desc.toLowerCase();
 
-    const exists = catalog.some(
-      (p) => p.description.trim().toLowerCase() === desc.toLowerCase()
-    );
-
-    if (!exists) {
-      const code = `ITEM-${catalog.length + 1}`;
+    if (!seen.has(key)) {
+      seen.add(key);
       catalog.push({
         id: uuidv4(),
-        code,
         description: desc,
         specifications: item.specifications?.trim() || "",
         hsnSac: item.hsnSac?.trim() || "",
@@ -175,7 +190,7 @@ export async function syncNewItemsToCatalog(items: InvoiceItem[]): Promise<Catal
     }
   }
 
-  if (changed) {
+  if (changed || catalog.length !== (currentSettings.productCatalog || []).length) {
     const updated = { ...currentSettings, productCatalog: catalog };
     await updateSettings(updated);
     return catalog;
