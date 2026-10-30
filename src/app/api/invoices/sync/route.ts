@@ -1,22 +1,26 @@
 import { NextResponse } from "next/server";
-import { syncInvoicesWithCloud } from "@/lib/server-storage";
-import { Invoice } from "@/types/invoice";
+import { getServerInvoices } from "@/lib/server-storage";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+export async function POST() {
   try {
-    const body = await request.json();
-    const clientInvoices: Invoice[] = Array.isArray(body?.invoices) ? body.invoices : [];
-    const synced = await syncInvoicesWithCloud(clientInvoices);
+    const invoices = await getServerInvoices();
     return NextResponse.json({
       success: true,
-      invoices: synced,
-      count: synced.length,
+      invoices,
+      count: invoices.length,
     });
   } catch (err: any) {
-    console.error("API /api/invoices/sync failed:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
+export async function GET() {
+  try {
+    const invoices = await getServerInvoices();
+    return NextResponse.json(invoices);
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}

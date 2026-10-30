@@ -111,11 +111,19 @@ export default function DashboardPage() {
     if (confirm(`Are you sure you want to permanently delete invoice ${invoiceNo || id}?`)) {
       setDeletingId(id);
       // Instant optimistic UI update
-      setInvoices((prev) => prev.filter((inv) => inv.id !== id));
-      await deleteInvoice(id);
-      setDeletingId(null);
-      // Immediately pull fresh state
-      liveSyncFromDB();
+      setInvoices((prev) =>
+        prev.filter((inv) => inv.id !== id && inv.invoiceInfo?.invoiceNo !== invoiceNo)
+      );
+      try {
+        await deleteInvoice(id);
+      } catch (err) {
+        console.error("Delete error:", err);
+      } finally {
+        setDeletingId(null);
+        // Force fresh load directly from server database
+        const freshList = await fetchInvoices();
+        setInvoices(freshList);
+      }
     }
   }
 

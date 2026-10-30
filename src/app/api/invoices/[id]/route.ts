@@ -8,7 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const rawParams = await params;
+    const id = decodeURIComponent(rawParams.id);
     const invoice = await getServerInvoiceById(id);
     if (!invoice) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
@@ -24,9 +25,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const rawParams = await params;
+    const id = decodeURIComponent(rawParams.id);
     const deleted = await deleteServerInvoice(id);
-    return NextResponse.json({ success: deleted });
+    return NextResponse.json({ success: deleted, id });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -38,7 +40,8 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
-    const { id } = await params;
+    const rawParams = await params;
+    const id = decodeURIComponent(rawParams.id);
     const saved = await saveServerInvoice({ ...body, id });
     return NextResponse.json(saved);
   } catch (err: any) {

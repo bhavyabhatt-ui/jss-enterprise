@@ -26,27 +26,16 @@ export function deduplicateInvoices(invoices: Invoice[]): Invoice[] {
 }
 
 /**
- * Fetch and bidirectionally sync invoices with the cloud database.
- * Never destroys local data if the server is offline or empty.
+ * READ ALL: Fetch all invoices from Server Database.
+ * Updates local cache to match server state exactly.
  */
 export async function fetchInvoices(): Promise<Invoice[]> {
-  const localList = getAllInvoices();
-
   try {
-    // Bidirectional sync: send local invoices so server can merge any unsynced bills
-    const res = await fetch("/api/invoices/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ invoices: localList }),
-      cache: "no-store",
-    });
-
+    const res = await fetch("/api/invoices", { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
-      const serverInvoices = data.invoices || data;
-
-      if (Array.isArray(serverInvoices) && serverInvoices.length > 0) {
-        const deduped = deduplicateInvoices(serverInvoices);
+      if (Array.isArray(data)) {
+        const deduped = deduplicateInvoices(data);
         if (typeof window !== "undefined") {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped));
         }
@@ -54,44 +43,44 @@ export async function fetchInvoices(): Promise<Invoice[]> {
       }
     }
   } catch (err) {
-    console.warn("Cloud sync request failed, preserving local data safely:", err);
+    console.warn("Server API fetch failed, using local cache fallback:", err);
   }
 
-  return localList;
+  return getAllInvoices();
 }
 
 /**
- * Fetch a specific invoice from Server API, fallback to localStorage
+ * READ ONE: Fetch a specific invoice from Server Database.
  */
 export async function fetchInvoiceById(id: string): Promise<Invoice | null> {
+  const cleanId = (id || "").trim();
   try {
-    const res = await fetch(`/api/invoices/${id}`, { cache: "no-store" });
+    const res = await fetch(`/api/invoices/${encodeURIComponent(cleanId)}`, { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
       if (data && data.id) {
-        const local = getAllInvoices();
-        const idx = local.findIndex((inv) => inv.id === id);
-        if (idx >= 0) {
-          local[idx] = data;
-        } else {
-          local.unshift(data);
-        }
-        const deduped = deduplicateInvoices(local);
         if (typeof window !== "undefined") {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped));
+          const local = getAllInvoices();
+          const idx = local.findIndex((inv) => inv.id === data.id);
+          if (idx >= 0) {
+            local[idx] = data;
+          } else {
+            local.unshift(data);
+          }
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(deduplicateInvoices(local)));
         }
         return data;
       }
     }
   } catch (err) {
-    console.warn(`Server API fetch for invoice ${id} failed, using local cache:`, err);
+    console.warn(`Server API fetch for invoice ${cleanId} failed, using local cache:`, err);
   }
 
-  return getInvoiceById(id);
+  return getInvoiceById(cleanId);
 }
 
 /**
- * Save invoice to both Server API and localStorage with deduplication
+ * CREATE / UPDATE: Save invoice to Server Database and localStorage.
  */
 export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
   const invNo = invoice.invoiceInfo?.invoiceNo?.trim().toLowerCase();
@@ -119,12 +108,13 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped));
   }
 
-  // 2. Persist to MongoDB Atlas Server Database
+  // 2. Persist directly to MongoDB Atlas Server Database
   try {
     const res = await fetch("/api/invoices", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(invoice),
+      cache: "no-store",
     });
 
     if (res.ok) {
@@ -153,46 +143,61 @@ export async function saveInvoice(invoice: Invoice): Promise<Invoice> {
 }
 
 /**
- * Delete invoice from both Server API and localStorage
+ * DELETE: Remove invoice permanently from Database and localStorage.
  */
-export async function deleteInvoice(id: string): Promise<void> {
+export async function deleteInvoice(id: string): Promise<boolean> {
+  const cleanId = (id || "").trim();
+
+  // 1. Immediately remove from local cache
   if (typeof window !== "undefined") {
-    const invoices = getAllInvoices().filter((inv) => inv.id !== id);
+    const invoices = getAllInvoices().filter(
+      (inv) => inv.id !== cleanId && inv.invoiceInfo?.invoiceNo !== cleanId
+    );
     localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
   }
 
+  // 2. Call DELETE endpoint to permanently remove from MongoDB Atlas
   try {
-    await fetch(`/api/invoices/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/invoices/${encodeURIComponent(cleanId)}`, {
+      method: "DELETE",
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const result = await res.json();
+      return !!result.success;
+    }
   } catch (err) {
-    console.error(`Failed to delete invoice ${id} on server:`, err);
+    console.error(`Failed to delete invoice ${cleanId} on server:`, err);
   }
+  return false;
 }
 
 /**
- * Local cache read with deduplication
+ * Local cache read
  */
 export function getAllInvoices(): Invoice[] {
-  if (typeof window === "undefined") return [SAMPLE_INITIAL_INVOICE];
+  if (typeof window === "undefined") return [];
   try {
     const data = localStorage.getItem(STORAGE_KEY);
-    if (!data) {
-      const initial = [SAMPLE_INITIAL_INVOICE];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-      return initial;
-    }
+    if (!data) return [];
     const parsed = JSON.parse(data);
-    if (Array.isArray(parsed) && parsed.length > 0) {
+    if (Array.isArray(parsed)) {
       return deduplicateInvoices(parsed);
     }
-    return [SAMPLE_INITIAL_INVOICE];
+    return [];
   } catch {
-    return [SAMPLE_INITIAL_INVOICE];
+    return [];
   }
 }
 
 export function getInvoiceById(id: string): Invoice | null {
+  const cleanId = (id || "").trim();
   const invoices = getAllInvoices();
-  return invoices.find((inv) => inv.id === id) || null;
+  return (
+    invoices.find(
+      (inv) => inv.id === cleanId || inv.invoiceInfo?.invoiceNo === cleanId
+    ) || null
+  );
 }
 
 /**
