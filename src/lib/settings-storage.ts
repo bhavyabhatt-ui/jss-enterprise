@@ -49,6 +49,7 @@ export async function fetchSettings(): Promise<SystemSettings> {
 export async function updateSettings(settings: SystemSettings): Promise<SystemSettings> {
   if (typeof window !== "undefined") {
     localStorage.setItem(SETTINGS_LOCAL_KEY, JSON.stringify(settings));
+    window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: settings }));
   }
 
   try {
@@ -61,6 +62,10 @@ export async function updateSettings(settings: SystemSettings): Promise<SystemSe
 
     if (res.ok) {
       const saved = await res.json();
+      if (typeof window !== "undefined") {
+        localStorage.setItem(SETTINGS_LOCAL_KEY, JSON.stringify(saved));
+        window.dispatchEvent(new CustomEvent("settingsUpdated", { detail: saved }));
+      }
       return saved;
     }
   } catch (err) {
@@ -154,3 +159,4 @@ export async function logoutAdminSession(allDevices: boolean = false): Promise<v
     }
   }
 }
+

@@ -1386,3 +1386,4 @@ export default function SettingsModal({ isOpen, onClose, onSettingsChanged }: Pr
     </div>
   );
 }
+

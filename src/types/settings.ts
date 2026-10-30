@@ -88,3 +88,4 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   defaultPlaceOfSupply: "Gujarat (24)",
   authSessionVersion: 1,
 };
+
