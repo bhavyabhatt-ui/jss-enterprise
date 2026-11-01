@@ -93,86 +93,77 @@ export default function ResponsiveInvoiceViewer({ invoice }: Props) {
         </div>
       )}
 
-      {/* ── TAB CONTENT: OFFICIAL A4 SHEET VIEW ── */}
-      {(!isMobileScreen || activeTab === "a4") && (
-        <div className="w-full flex flex-col items-center">
-          {/* Zoom controls for A4 sheet view */}
-          {isMobileScreen && (
-            <div className="w-full max-w-xl flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-2xs mb-3 text-xs no-print">
-              <span className="font-semibold text-slate-600">
-                Zoom: <strong className="text-slate-900">{Math.round(zoomLevel * 100)}%</strong>
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleZoomOut}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700"
-                  title="Zoom Out"
-                >
-                  <ZoomOut className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleFitWidth}
-                  className="px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
-                >
-                  Fit
-                </button>
-                <button
-                  type="button"
-                  onClick={handleResetZoom}
-                  className="px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
-                >
-                  100%
-                </button>
-                <button
-                  type="button"
-                  onClick={handleZoomIn}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700"
-                  title="Zoom In"
-                >
-                  <ZoomIn className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div
-            ref={containerRef}
-            className="w-full flex justify-center overflow-x-auto pb-6"
-          >
-            <div
-              style={{
-                width: "800px",
-                transform: zoomLevel !== 1 ? `scale(${zoomLevel})` : undefined,
-                transformOrigin: "top center",
-                marginBottom: zoomLevel < 1 ? `-${Math.round((1 - zoomLevel) * 1150)}px` : undefined,
-              }}
-              className="shrink-0 transition-transform duration-150"
-            >
-              <InvoicePreview invoice={invoice} />
+      {/* ── TAB CONTENT: OFFICIAL A4 SHEET VIEW & CAPTURE TARGET ── */}
+      <div
+        className={
+          isMobileScreen && activeTab === "mobile"
+            ? "absolute opacity-0 pointer-events-none -z-50"
+            : "w-full flex flex-col items-center"
+        }
+        style={
+          isMobileScreen && activeTab === "mobile"
+            ? { width: "800px", position: "absolute", top: 0, left: 0 }
+            : undefined
+        }
+      >
+        {/* Zoom controls for A4 sheet view on mobile when tab is active */}
+        {isMobileScreen && activeTab === "a4" && (
+          <div className="w-full max-w-xl flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-2xs mb-3 text-xs no-print">
+            <span className="font-semibold text-slate-600">
+              Zoom: <strong className="text-slate-900">{Math.round(zoomLevel * 100)}%</strong>
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleZoomOut}
+                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700"
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleFitWidth}
+                className="px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
+              >
+                Fit
+              </button>
+              <button
+                type="button"
+                onClick={handleResetZoom}
+                className="px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
+              >
+                100%
+              </button>
+              <button
+                type="button"
+                onClick={handleZoomIn}
+                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700"
+                title="Zoom In"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── HIDDEN / OFF-SCREEN ANCHOR FOR PDF/IMAGE/PRINT CAPTURE ── */}
-      {/* If mobile card view is active, ensure #invoice-print-area remains rendered in DOM for capture */}
-      {isMobileScreen && activeTab === "mobile" && (
         <div
-          aria-hidden="true"
-          style={{
-            position: "fixed",
-            left: "-9999px",
-            top: "0",
-            width: "800px",
-            pointerEvents: "none",
-            zIndex: -9999,
-          }}
+          ref={containerRef}
+          className="w-full flex justify-center overflow-x-auto pb-6"
         >
-          <InvoicePreview invoice={invoice} />
+          <div
+            style={{
+              width: "800px",
+              transform: zoomLevel !== 1 && activeTab === "a4" ? `scale(${zoomLevel})` : undefined,
+              transformOrigin: "top center",
+              marginBottom: zoomLevel < 1 && activeTab === "a4" ? `-${Math.round((1 - zoomLevel) * 1150)}px` : undefined,
+            }}
+            className="shrink-0 transition-transform duration-150"
+          >
+            <InvoicePreview invoice={invoice} />
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

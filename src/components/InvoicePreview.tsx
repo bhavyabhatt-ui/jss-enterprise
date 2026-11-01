@@ -1,6 +1,7 @@
 "use client";
 
 import { Invoice, DEFAULT_COMPANY_HEADER } from "@/types/invoice";
+import { JSS_LOGO_BASE64 } from "@/lib/logo-base64";
 
 interface Props {
   invoice: Invoice;
@@ -26,6 +27,15 @@ export default function InvoicePreview({ invoice }: Props) {
   const formatCurrency = (num: number) =>
     num.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  // Only display valid non-empty items (filters out empty dummy rows)
+  const validItems = (items || []).filter(
+    (item) =>
+      (item.description && item.description.trim() !== "" && item.description.trim() !== "-") ||
+      Number(item.amount) > 0 ||
+      Number(item.rate) > 0
+  );
+  const displayItems = validItems.length > 0 ? validItems : items.slice(0, 1);
+
   return (
     <div
       id="invoice-print-area"
@@ -43,7 +53,7 @@ export default function InvoicePreview({ invoice }: Props) {
         {/* Left: Logo & Details */}
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-14 h-14 rounded-lg bg-white/10 p-1 border border-amber-400/40 shrink-0 flex items-center justify-center">
-            <img src="/logo.png" alt="Company Logo" className="w-full h-full object-contain" />
+            <img src={JSS_LOGO_BASE64} alt="Company Logo" className="w-full h-full object-contain" />
           </div>
           <div className="min-w-0">
             <h2 className="font-extrabold text-[#f59e0b] text-base tracking-wide uppercase leading-tight truncate">
@@ -157,9 +167,9 @@ export default function InvoicePreview({ invoice }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {items.map((item, idx) => (
+            {displayItems.map((item, idx) => (
               <tr
-                key={item.id}
+                key={item.id || idx}
                 className={idx % 2 === 1 ? "bg-slate-50/70" : "bg-white"}
               >
                 <td className="py-2 px-2 text-center text-slate-500 font-medium">{idx + 1}</td>
