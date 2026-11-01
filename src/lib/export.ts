@@ -13,12 +13,23 @@ async function captureElementToPng(elementId: string): Promise<string> {
     throw new Error("Invoice preview element not found");
   }
 
+  // Pre-decode all images within the element so canvas never captures an unrendered image
+  const imgs = Array.from(element.querySelectorAll("img"));
+  await Promise.all(
+    imgs.map((img) => {
+      if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+      return (img as HTMLImageElement).decode
+        ? (img as HTMLImageElement).decode().catch(() => {})
+        : Promise.resolve();
+    })
+  );
+
   // Generate high-resolution image at fixed 800px width (pixelRatio: 2 gives 300 DPI sharpness)
   const dataUrl = await toPng(element, {
     quality: 1,
     pixelRatio: 2,
     backgroundColor: "#ffffff",
-    cacheBust: true,
+    cacheBust: false,
     width: 800,
     style: {
       transform: "none",
@@ -27,6 +38,8 @@ async function captureElementToPng(elementId: string): Promise<string> {
       width: "800px",
       minWidth: "800px",
       maxWidth: "800px",
+      opacity: "1",
+      visibility: "visible",
     },
   });
 
@@ -110,6 +123,12 @@ export async function generatePDFBlob(elementId: string): Promise<Blob> {
  * Print Invoice by generating the exact A4 PDF, triggering download, and opening native PDF print!
  */
 export async function printInvoice(elementId: string, filename: string): Promise<void> {
+  // 1. Direct native print dialog (vector crisp on iOS AirPrint, Android Print, Desktop Chrome/Safari)
+  if (typeof window !== "undefined" && typeof window.print === "function") {
+    window.print();
+    return;
+  }
+
   const pdf = await createInvoicePDF(elementId);
   pdf.autoPrint();
 
@@ -347,6 +366,11 @@ export async function exportToWord(invoice: Invoice): Promise<void> {
       width: { size: widthPct, type: WidthType.PERCENTAGE },
     });
 
+  const validItems = items && items.length > 0
+    ? items.filter((it) => (it.description && it.description.trim() !== "") || Number(it.rate) > 0 || Number(it.amount) > 0)
+    : [];
+  const displayItems = validItems.length > 0 ? validItems : items;
+
   const itemRows = [
     new TableRow({
       children: [
@@ -359,7 +383,7 @@ export async function exportToWord(invoice: Invoice): Promise<void> {
         itemHeaderCell("Amount (₹)", 12, AlignmentType.RIGHT),
       ],
     }),
-    ...items.map((item, idx) => {
+    ...displayItems.map((item, idx) => {
       const isAlt = idx % 2 === 1;
       const cellShading = isAlt
         ? { type: ShadingType.SOLID, color: "F8FAFC", fill: "F8FAFC" }
@@ -742,7 +766,15 @@ export async function shareInvoiceToWhatsApp(
     ? `https://api.whatsapp.com/send?phone=${phone}&text=${encoded}`
     : `https://api.whatsapp.com/send?text=${encoded}`;
 
-  window.open(url, "_blank");
+  const isMobile = typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile) {
+    window.location.href = url;
+  } else {
+    const waWin = window.open(url, "_blank");
+    if (!waWin) {
+      window.location.href = url;
+    }
+  }
 }
 
 /**

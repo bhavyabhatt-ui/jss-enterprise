@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getInvoiceById, fetchInvoiceById } from "@/lib/storage";
-import { exportToPDF, exportToImage, exportInvoiceToExcel, shareInvoiceToWhatsApp, printInvoice } from "@/lib/export";
+import { exportToPDF, exportToImage, exportToWord, shareInvoiceToWhatsApp, printInvoice } from "@/lib/export";
+import { JSS_LOGO_BASE64 } from "@/lib/logo-base64";
 import { Invoice } from "@/types/invoice";
 import ResponsiveInvoiceViewer from "@/components/ResponsiveInvoiceViewer";
 import SettingsModal from "@/components/SettingsModal";
@@ -21,7 +22,7 @@ import {
   Settings,
 } from "lucide-react";
 
-type ExportType = "pdf" | "image" | "excel" | "whatsapp" | "print" | null;
+type ExportType = "pdf" | "image" | "word" | "whatsapp" | "print" | null;
 
 export default function InvoiceViewPage() {
   const params = useParams();
@@ -67,9 +68,9 @@ export default function InvoiceViewPage() {
       } else if (type === "image") {
         await exportToImage("invoice-print-area", filename);
         showToast("PNG Image downloaded successfully!");
-      } else if (type === "excel") {
-        await exportInvoiceToExcel(invoice);
-        showToast("Excel spreadsheet (.xlsx) downloaded successfully!");
+      } else if (type === "word") {
+        await exportToWord(invoice);
+        showToast("Word document (.docx) downloaded successfully!");
       } else if (type === "whatsapp") {
         await shareInvoiceToWhatsApp(invoice, "invoice-print-area");
         showToast("Opening share dialog with attached PDF & bill details...");
@@ -124,7 +125,7 @@ export default function InvoiceViewPage() {
 
               <div className="flex items-center gap-1.5 truncate px-1">
                 <div className="w-6 h-6 rounded-md overflow-hidden border border-slate-200 bg-white p-0.5 shrink-0">
-                  <img src="/logo.png" alt="JSS Enterprise" className="w-full h-full object-contain" />
+                  <img src={JSS_LOGO_BASE64} alt="JSS Enterprise" className="w-full h-full object-contain" />
                 </div>
                 <span className="font-extrabold text-slate-900 text-xs tracking-wide truncate">
                   {invoice.invoiceInfo.invoiceNo || "JSS ENTERPRISE"}
@@ -187,19 +188,19 @@ export default function InvoiceViewPage() {
                 <span>PNG</span>
               </button>
 
-              {/* Excel */}
+              {/* Word (.docx) */}
               <button
-                onClick={() => handleExport("excel")}
+                onClick={() => handleExport("word")}
                 disabled={!!exporting}
-                className="flex items-center justify-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
-                title="Download Excel spreadsheet (.xlsx)"
+                className="flex items-center justify-center gap-1 bg-sky-50 text-sky-800 border border-sky-200 hover:bg-sky-100 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+                title="Download Word document (.docx)"
               >
-                {exporting === "excel" ? (
+                {exporting === "word" ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <FileText className="w-3.5 h-3.5 text-sky-600" />
                 )}
-                <span>Excel</span>
+                <span>Word</span>
               </button>
             </div>
 
@@ -232,7 +233,7 @@ export default function InvoiceViewPage() {
 
               <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
                 <div className="w-7 h-7 rounded-md overflow-hidden border border-slate-200 bg-white p-0.5">
-                  <img src="/logo.png" alt="JSS Enterprise" className="w-full h-full object-contain" />
+                  <img src={JSS_LOGO_BASE64} alt="JSS Enterprise" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <span className="font-extrabold text-slate-900 text-xs tracking-wide block leading-none">
@@ -305,19 +306,19 @@ export default function InvoiceViewPage() {
                 <span>Image</span>
               </button>
 
-              {/* Excel Export */}
+              {/* Word (.docx) Export */}
               <button
-                onClick={() => handleExport("excel")}
+                onClick={() => handleExport("word")}
                 disabled={!!exporting}
-                className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
-                title="Download Excel spreadsheet (.xlsx)"
+                className="flex items-center gap-1.5 bg-sky-50 text-sky-800 border border-sky-200 hover:bg-sky-100 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
+                title="Download Word document (.docx)"
               >
-                {exporting === "excel" ? (
+                {exporting === "word" ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <FileText className="w-3.5 h-3.5 text-sky-600" />
                 )}
-                <span>Excel (.xlsx)</span>
+                <span>Word (.docx)</span>
               </button>
 
               {/* Edit */}

@@ -60,10 +60,11 @@ export default function ResponsiveInvoiceViewer({ invoice }: Props) {
             <button
               type="button"
               onClick={() => setActiveTab("mobile")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all ${activeTab === "mobile"
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                activeTab === "mobile"
                   ? "bg-white text-slate-900 shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
-                }`}
+              }`}
             >
               <Smartphone className="w-4 h-4 text-amber-500" />
               <span>📱 Mobile Card View</span>
@@ -74,10 +75,11 @@ export default function ResponsiveInvoiceViewer({ invoice }: Props) {
                 setActiveTab("a4");
                 handleFitWidth();
               }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all ${activeTab === "a4"
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                activeTab === "a4"
                   ? "bg-white text-slate-900 shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
-                }`}
+              }`}
             >
               <FileText className="w-4 h-4 text-sky-600" />
               <span>📄 Official A4 Sheet</span>
@@ -93,86 +95,72 @@ export default function ResponsiveInvoiceViewer({ invoice }: Props) {
         </div>
       )}
 
-      {/* ── TAB CONTENT: OFFICIAL A4 SHEET VIEW ── */}
-      {(!isMobileScreen || activeTab === "a4") && (
-        <div className="w-full flex flex-col items-center">
-          {/* Zoom controls for A4 sheet view */}
-          {isMobileScreen && (
-            <div className="w-full max-w-xl flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-2xs mb-3 text-xs no-print">
-              <span className="font-semibold text-slate-600">
-                Zoom: <strong className="text-slate-900">{Math.round(zoomLevel * 100)}%</strong>
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleZoomOut}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700"
-                  title="Zoom Out"
-                >
-                  <ZoomOut className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleFitWidth}
-                  className="px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
-                >
-                  Fit
-                </button>
-                <button
-                  type="button"
-                  onClick={handleResetZoom}
-                  className="px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
-                >
-                  100%
-                </button>
-                <button
-                  type="button"
-                  onClick={handleZoomIn}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700"
-                  title="Zoom In"
-                >
-                  <ZoomIn className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div
-            ref={containerRef}
-            className="w-full flex justify-center overflow-x-auto pb-6"
-          >
-            <div
-              style={{
-                width: "800px",
-                transform: zoomLevel !== 1 ? `scale(${zoomLevel})` : undefined,
-                transformOrigin: "top center",
-                marginBottom: zoomLevel < 1 ? `-${Math.round((1 - zoomLevel) * 1150)}px` : undefined,
-              }}
-              className="shrink-0 transition-transform duration-150"
-            >
-              <InvoicePreview invoice={invoice} />
+      {/* ── OFFICIAL A4 SHEET VIEW (EXACTLY ONE INSTANCE IN DOM FOR RELIABLE FAST RENDERING & PDF CAPTURE) ── */}
+      <div
+        className={
+          isMobileScreen && activeTab === "mobile"
+            ? "fixed top-0 left-0 w-[800px] pointer-events-none opacity-0 -z-50 overflow-hidden"
+            : "w-full flex flex-col items-center"
+        }
+      >
+        {/* Zoom controls for A4 sheet view */}
+        {isMobileScreen && activeTab === "a4" && (
+          <div className="w-full max-w-xl flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-2xs mb-3 text-xs no-print">
+            <span className="font-semibold text-slate-600">
+              Zoom: <strong className="text-slate-900">{Math.round(zoomLevel * 100)}%</strong>
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleZoomOut}
+                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700"
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleFitWidth}
+                className="px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
+              >
+                Fit
+              </button>
+              <button
+                type="button"
+                onClick={handleResetZoom}
+                className="px-2 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-[11px] font-semibold text-slate-700"
+              >
+                100%
+              </button>
+              <button
+                type="button"
+                onClick={handleZoomIn}
+                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700"
+                title="Zoom In"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── HIDDEN / OFF-SCREEN ANCHOR FOR PDF/IMAGE/PRINT CAPTURE ── */}
-      {/* If mobile card view is active, ensure #invoice-print-area remains rendered in DOM for capture */}
-      {isMobileScreen && activeTab === "mobile" && (
         <div
-          aria-hidden="true"
-          style={{
-            position: "fixed",
-            left: "-9999px",
-            top: "0",
-            width: "800px",
-            pointerEvents: "none",
-            zIndex: -9999,
-          }}
+          ref={containerRef}
+          className="w-full flex justify-center overflow-x-auto pb-6"
         >
-          <InvoicePreview invoice={invoice} />
+          <div
+            style={{
+              width: "800px",
+              transform: (!isMobileScreen || activeTab === "a4") && zoomLevel !== 1 ? `scale(${zoomLevel})` : undefined,
+              transformOrigin: "top center",
+              marginBottom: (!isMobileScreen || activeTab === "a4") && zoomLevel < 1 ? `-${Math.round((1 - zoomLevel) * 1150)}px` : undefined,
+            }}
+            className="shrink-0 transition-transform duration-150"
+          >
+            <InvoicePreview invoice={invoice} />
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
