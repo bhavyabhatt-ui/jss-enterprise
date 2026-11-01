@@ -13,36 +13,17 @@ async function captureElementToPng(elementId: string): Promise<string> {
     throw new Error("Invoice preview element not found");
   }
 
-  // Pre-decode and ensure all images (e.g. logo) are fully loaded before capturing
-  const images = Array.from(element.getElementsByTagName("img"));
-  await Promise.all(
-    images.map(
-      (img) =>
-        new Promise<void>((resolve) => {
-          if (img.complete && img.naturalHeight > 0) {
-            resolve();
-          } else {
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
-            setTimeout(resolve, 300);
-          }
-        })
-    )
-  );
-
   // Generate high-resolution image at fixed 800px width (pixelRatio: 2 gives 300 DPI sharpness)
   const dataUrl = await toPng(element, {
     quality: 1,
     pixelRatio: 2,
     backgroundColor: "#ffffff",
-    cacheBust: false,
+    cacheBust: true,
     width: 800,
     style: {
       transform: "none",
       boxShadow: "none",
       margin: "0",
-      opacity: "1",
-      visibility: "visible",
       width: "800px",
       minWidth: "800px",
       maxWidth: "800px",
@@ -126,12 +107,27 @@ export async function generatePDFBlob(elementId: string): Promise<Blob> {
 }
 
 /**
- * Print Invoice using native browser print dialog (calibrated via @media print to fit A4 cleanly)
+ * Print Invoice by generating the exact A4 PDF, triggering download, and opening native PDF print!
  */
 export async function printInvoice(elementId: string, filename: string): Promise<void> {
-  if (typeof window !== "undefined") {
-    // If the print area is hidden (e.g. on mobile card view), ensure it is visible to print styles
-    window.print();
+  const pdf = await createInvoicePDF(elementId);
+  pdf.autoPrint();
+
+  const blob = pdf.output("blob");
+  const blobUrl = URL.createObjectURL(blob);
+
+  // 1. Download the generated PDF directly so the user gets the file
+  const downloadLink = document.createElement("a");
+  downloadLink.href = blobUrl;
+  downloadLink.download = `${filename}.pdf`;
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  document.body.removeChild(downloadLink);
+
+  // 2. Open PDF in a new tab/window to trigger native print dialog
+  const printWindow = window.open(blobUrl, "_blank");
+  if (printWindow) {
+    printWindow.focus();
   }
 }
 
@@ -699,17 +695,7 @@ export async function shareInvoiceToWhatsApp(
   elementId?: string
 ): Promise<void> {
   const text = formatInvoiceForWhatsApp(invoice);
-  const cleanNo = (invoice.invoiceInfo?.invoiceNo || invoice.id || "Invoice").replace(/[/\\?%*:|"<>]/g, "-");
-
-  let phone = (invoice.buyerDetails?.contactNo || "").replace(/\D/g, "");
-  if (phone.length === 10) {
-    phone = "91" + phone;
-  }
-
-  const encoded = encodeURIComponent(text);
-  const waUrl = phone.length >= 10
-    ? `https://api.whatsapp.com/send?phone=${phone}&text=${encoded}`
-    : `https://api.whatsapp.com/send?text=${encoded}`;
+  const cleanNo = (invoice.invoiceInfo.invoiceNo || invoice.id).replace(/[/\\?%*:|"<>]/g, "-");
 
   // 1. Try native Web Share API with PDF attached (works on Android, iOS, tablets, and supported browsers)
   if (typeof navigator !== "undefined" && navigator.canShare) {
@@ -723,7 +709,7 @@ export async function shareInvoiceToWhatsApp(
         const file = new File([pdfBlob], `Invoice-${cleanNo}.pdf`, { type: "application/pdf" });
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({
-            title: `Invoice ${invoice.invoiceInfo?.invoiceNo || ""} - ${invoice.header?.companyName || "JSS ENTERPRISE"}`,
+            title: `Invoice ${invoice.invoiceInfo.invoiceNo} - ${invoice.header?.companyName || "JSS ENTERPRISE"}`,
             text: text,
             files: [file],
           });
@@ -745,249 +731,164 @@ export async function shareInvoiceToWhatsApp(
     } catch {}
   }
 
-  // 3. Open WhatsApp - use window.location.href on mobile to prevent popup blocker suppression
-  const isMobile = typeof window !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isMobile) {
-    window.location.href = waUrl;
-  } else {
-    window.open(waUrl, "_blank");
+  // 3. Open WhatsApp with complete formatted invoice details
+  let phone = invoice.buyerDetails.contactNo.replace(/\D/g, "");
+  if (phone.length === 10) {
+    phone = "91" + phone;
   }
+
+  const encoded = encodeURIComponent(text);
+  const url = phone.length >= 10
+    ? `https://api.whatsapp.com/send?phone=${phone}&text=${encoded}`
+    : `https://api.whatsapp.com/send?text=${encoded}`;
+
+  window.open(url, "_blank");
 }
 
 /**
  * Export single invoice to Microsoft Excel (.xlsx) spreadsheet
- * (Professional layout with merged header, clean columns, and no dummy blank rows)
  */
 export async function exportInvoiceToExcel(invoice: Invoice): Promise<void> {
   const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
 
   const cleanNo = (invoice.invoiceInfo?.invoiceNo || "Invoice").replace(/[/\\?%*:|"<>]/g, "-");
-  const header = invoice.header || DEFAULT_COMPANY_HEADER;
 
-  // Filter out any empty dummy rows (only genuine items)
-  const validItems = (invoice.items || []).filter(
-    (item) =>
-      (item.description && item.description.trim() !== "" && item.description.trim() !== "-") ||
-      Number(item.rate) > 0 ||
-      Number(item.amount) > 0
-  );
-  const itemsToExport = validItems.length > 0 ? validItems : (invoice.items || []).slice(0, 1);
-
-  const headerRows: any[][] = [
-    [(header.companyName || "JSS ENTERPRISE").toUpperCase() + " - TAX INVOICE"],
-    [header.tagline || "PRECISION | POWER | PROGRESS"],
-    [header.address || ""],
-    [`GSTIN: ${header.gstin || "-"}    State Code: ${header.stateCode || "-"}    Mobile: ${header.phone || "-"}    Email: ${header.email || "-"}`],
+  const headerData: any[][] = [
+    ["JSS ENTERPRISE - TAX INVOICE"],
+    ["Precision | Power | Progress"],
     [""],
-    ["INVOICE INFORMATION", "", "BILLED TO / BUYER DETAILS", "", "", "", ""],
-    ["Invoice No:", invoice.invoiceInfo?.invoiceNo || "-", "Customer Name:", invoice.buyerDetails?.customerName || "-", "", "", ""],
-    ["Invoice Date:", invoice.invoiceInfo?.invoiceDate || "-", "Full Address:", invoice.buyerDetails?.address || "-", "", "", ""],
-    ["Place of Supply:", invoice.invoiceInfo?.placeOfSupply || "-", "City / State:", invoice.buyerDetails?.cityState || "-", "", "", ""],
-    ["Challan No:", invoice.invoiceInfo?.challanNo || "-", "GSTIN / PAN:", invoice.buyerDetails?.gstinPan || "-", "", "", ""],
-    ["PO Date & No:", invoice.invoiceInfo?.poDateNo || "-", "Contact No:", invoice.buyerDetails?.contactNo || "-", "", "", ""],
+    ["INVOICE DETAILS", "", "BUYER DETAILS", ""],
+    ["Invoice No:", invoice.invoiceInfo?.invoiceNo || "", "Customer Name:", invoice.buyerDetails?.customerName || ""],
+    ["Invoice Date:", invoice.invoiceInfo?.invoiceDate || "", "Address:", invoice.buyerDetails?.address || ""],
+    ["Place of Supply:", invoice.invoiceInfo?.placeOfSupply || "", "City / State:", invoice.buyerDetails?.cityState || ""],
+    ["Challan No:", invoice.invoiceInfo?.challanNo || "", "GSTIN / PAN:", invoice.buyerDetails?.gstinPan || ""],
+    ["PO Date & No:", invoice.invoiceInfo?.poDateNo || "", "Contact No:", invoice.buyerDetails?.contactNo || ""],
     [""],
-    ["S.No", "Product / Service Description & Specifications", "HSN/SAC", "Qty", "Unit", "Rate (₹)", "Amount (₹)"],
+    ["S.No", "Description of Goods / Services", "HSN/SAC", "Qty", "Unit", "Rate (₹)", "Amount (₹)"],
   ];
 
-  // Items rows
-  itemsToExport.forEach((item, idx) => {
-    const fullDesc = item.description + (item.specifications ? ` (${item.specifications})` : "");
-    headerRows.push([
+  (invoice.items || []).forEach((item, idx) => {
+    headerData.push([
       idx + 1,
-      fullDesc,
+      item.description + (item.specifications ? ` - ${item.specifications}` : ""),
       item.hsnSac || "-",
-      Number(item.qty) || 1,
+      Number(item.qty) || 0,
       item.unit || "Nos",
       Number(item.rate) || 0,
       Number(item.amount) || 0,
     ]);
   });
 
-  // Totals Summary
-  headerRows.push(
+  headerData.push(
     [""],
     ["", "", "", "", "", "Taxable Subtotal (₹):", Number(invoice.subTotal) || 0],
     ["", "", "", "", "", `CGST @ ${invoice.taxDetails?.cgst || 0}% (₹):`, Number(invoice.cgstAmount) || 0],
     ["", "", "", "", "", `SGST @ ${invoice.taxDetails?.sgst || 0}% (₹):`, Number(invoice.sgstAmount) || 0],
     ["", "", "", "", "", `IGST @ ${invoice.taxDetails?.igst || 0}% (₹):`, Number(invoice.igstAmount) || 0],
-    ["", "", "", "", "", "GRAND TOTAL (₹):", Number(invoice.grandTotal) || 0],
+    ["", "", "", "", "", "Grand Total (₹):", Number(invoice.grandTotal) || 0],
     ["", "", "", "", "", "Amount in Words:", invoice.amountInWords || ""],
     [""],
-    ["BANK PAYMENT DETAILS", "", "", "TERMS & CONDITIONS", "", "", ""],
-    ["Bank Name:", invoice.bankDetails?.bankName || "-", "", invoice.termsAndConditions || "", "", "", ""],
-    ["Account Holder:", invoice.bankDetails?.accountHolder || "-", "", "", "", "", ""],
-    ["Account No:", invoice.bankDetails?.accountNo || "-", "", "", "", "", ""],
-    ["IFSC Code:", invoice.bankDetails?.ifscCode || "-", "", "", "", "", ""],
-    ["Branch:", invoice.bankDetails?.branch || "-", "", "", "", "", ""]
+    ["BANK DETAILS", "", "", "TERMS & CONDITIONS", "", ""],
+    ["Bank Name:", invoice.bankDetails?.bankName || "", "", invoice.termsAndConditions || "", "", ""],
+    ["Account Holder:", invoice.bankDetails?.accountHolder || "", "", "", "", ""],
+    ["Account No:", invoice.bankDetails?.accountNo || "", "", "", "", ""],
+    ["IFSC Code:", invoice.bankDetails?.ifscCode || "", "", "", "", ""],
+    ["Branch:", invoice.bankDetails?.branch || "", "", "", "", ""]
   );
 
-  const ws = XLSX.utils.aoa_to_sheet(headerRows);
-
-  // Set Merges for title banners & section blocks
-  ws["!merges"] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // Company Title
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } }, // Tagline
-    { s: { r: 2, c: 0 }, e: { r: 2, c: 6 } }, // Address
-    { s: { r: 3, c: 0 }, e: { r: 3, c: 6 } }, // GSTIN / Phone / Email
-    { s: { r: 5, c: 0 }, e: { r: 5, c: 1 } }, // Section Header: Invoice Info
-    { s: { r: 5, c: 2 }, e: { r: 5, c: 6 } }, // Section Header: Buyer Details
-    { s: { r: 6, c: 3 }, e: { r: 6, c: 6 } }, // Customer Name
-    { s: { r: 7, c: 3 }, e: { r: 7, c: 6 } }, // Address
-    { s: { r: 8, c: 3 }, e: { r: 8, c: 6 } }, // City / State
-    { s: { r: 9, c: 3 }, e: { r: 9, c: 6 } }, // GSTIN
-    { s: { r: 10, c: 3 }, e: { r: 10, c: 6 } }, // Contact
-  ];
-
-  // Set generous column widths so no text is truncated or clipped
+  const ws = XLSX.utils.aoa_to_sheet(headerData);
   ws["!cols"] = [
-    { wch: 18 }, // Col A (S.No / Labels)
-    { wch: 48 }, // Col B (Description / Values)
-    { wch: 18 }, // Col C (HSN/SAC / Labels)
-    { wch: 12 }, // Col D (Qty)
-    { wch: 12 }, // Col E (Unit)
-    { wch: 24 }, // Col F (Rate / Totals Label)
-    { wch: 26 }, // Col G (Amount / Values)
+    { wch: 8 },
+    { wch: 38 },
+    { wch: 14 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 22 },
+    { wch: 22 },
   ];
 
-  XLSX.utils.book_append_sheet(wb, ws, `Tax Invoice`);
+  XLSX.utils.book_append_sheet(wb, ws, "Tax Invoice");
   XLSX.writeFile(wb, `Invoice-${cleanNo}.xlsx`);
 }
 
 /**
  * Export multiple selected invoices to Microsoft Excel (.xlsx) report
- * (Includes ALL bill data, master ledger, and itemized GST breakdowns)
  */
 export async function exportMultipleInvoicesToExcel(invoices: Invoice[]): Promise<void> {
   const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
 
-  // 1. Comprehensive Master Ledger (ALL DATA of every bill)
-  const masterRows = invoices.map((inv, idx) => {
-    // Generate summary of products billed
-    const validItems = (inv.items || []).filter(
-      (item) => (item.description && item.description.trim() !== "" && item.description.trim() !== "-") || Number(item.amount) > 0
-    );
-    const productListSummary = validItems
-      .map((it) => `${it.description || "Item"}${it.qty ? ` (${it.qty} ${it.unit || "Nos"})` : ""}`)
-      .join(", ");
+  // 1. Invoices Overview Sheet
+  const rows = invoices.map((inv, idx) => ({
+    "S.No": idx + 1,
+    "Invoice No": inv.invoiceInfo?.invoiceNo || "DRAFT",
+    "Date": inv.invoiceInfo?.invoiceDate || "",
+    "Customer / Buyer": inv.buyerDetails?.customerName || "",
+    "Buyer City/State": inv.buyerDetails?.cityState || "",
+    "Buyer GSTIN": inv.buyerDetails?.gstinPan || "",
+    "Buyer Contact": inv.buyerDetails?.contactNo || "",
+    "Taxable Amount (₹)": Number(inv.subTotal) || 0,
+    "CGST (₹)": Number(inv.cgstAmount) || 0,
+    "SGST (₹)": Number(inv.sgstAmount) || 0,
+    "IGST (₹)": Number(inv.igstAmount) || 0,
+    "Grand Total (₹)": Number(inv.grandTotal) || 0,
+    "Place of Supply": inv.invoiceInfo?.placeOfSupply || "",
+  }));
 
-    return {
-      "S.No": idx + 1,
-      "Invoice No": inv.invoiceInfo?.invoiceNo || "DRAFT",
-      "Invoice Date": inv.invoiceInfo?.invoiceDate || "",
-      "Customer / Buyer": inv.buyerDetails?.customerName || "",
-      "Buyer Full Address": inv.buyerDetails?.address || "",
-      "Buyer City / State": inv.buyerDetails?.cityState || "",
-      "Buyer GSTIN / PAN": inv.buyerDetails?.gstinPan || "",
-      "Buyer Contact No": inv.buyerDetails?.contactNo || "",
-      "Place of Supply": inv.invoiceInfo?.placeOfSupply || "",
-      "Challan No": inv.invoiceInfo?.challanNo || "",
-      "PO Date & No": inv.invoiceInfo?.poDateNo || "",
-      "Products Summary": productListSummary || "-",
-      "Total Items Count": validItems.length,
-      "Taxable Subtotal (₹)": Number(inv.subTotal) || 0,
-      "CGST Rate (%)": Number(inv.taxDetails?.cgst) || 0,
-      "CGST Amount (₹)": Number(inv.cgstAmount) || 0,
-      "SGST Rate (%)": Number(inv.taxDetails?.sgst) || 0,
-      "SGST Amount (₹)": Number(inv.sgstAmount) || 0,
-      "IGST Rate (%)": Number(inv.taxDetails?.igst) || 0,
-      "IGST Amount (₹)": Number(inv.igstAmount) || 0,
-      "Grand Total (₹)": Number(inv.grandTotal) || 0,
-      "Amount in Words": inv.amountInWords || "",
-      "Bank Name": inv.bankDetails?.bankName || "",
-      "Account Holder": inv.bankDetails?.accountHolder || "",
-      "Account No": inv.bankDetails?.accountNo || "",
-      "IFSC Code": inv.bankDetails?.ifscCode || "",
-      "Branch": inv.bankDetails?.branch || "",
-      "Terms & Conditions": inv.termsAndConditions || "",
-      "Created Date": inv.createdAt ? new Date(inv.createdAt).toLocaleDateString("en-IN") : "",
-    };
-  });
-
-  const wsMaster = XLSX.utils.json_to_sheet(masterRows);
-  wsMaster["!cols"] = [
-    { wch: 6 },  // S.No
-    { wch: 18 }, // Invoice No
-    { wch: 14 }, // Date
-    { wch: 30 }, // Customer
-    { wch: 36 }, // Address
-    { wch: 22 }, // City/State
-    { wch: 20 }, // GSTIN
-    { wch: 16 }, // Contact
-    { wch: 18 }, // Place of Supply
-    { wch: 14 }, // Challan No
-    { wch: 16 }, // PO Date/No
-    { wch: 42 }, // Products Summary
-    { wch: 18 }, // Items Count
-    { wch: 20 }, // Taxable Subtotal
-    { wch: 14 }, // CGST %
-    { wch: 18 }, // CGST Amt
-    { wch: 14 }, // SGST %
-    { wch: 18 }, // SGST Amt
-    { wch: 14 }, // IGST %
-    { wch: 18 }, // IGST Amt
-    { wch: 22 }, // Grand Total
-    { wch: 45 }, // In Words
-    { wch: 26 }, // Bank
-    { wch: 22 }, // Holder
-    { wch: 22 }, // Account No
-    { wch: 16 }, // IFSC
-    { wch: 28 }, // Branch
-    { wch: 45 }, // Terms
-    { wch: 16 }, // Created
+  const wsSummary = XLSX.utils.json_to_sheet(rows);
+  wsSummary["!cols"] = [
+    { wch: 6 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 28 },
+    { wch: 20 },
+    { wch: 18 },
+    { wch: 15 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 18 },
   ];
-  XLSX.utils.book_append_sheet(wb, wsMaster, "All Invoices (Full Data)");
+  XLSX.utils.book_append_sheet(wb, wsSummary, "Invoices Summary");
 
-  // 2. Line Items Detail Sheet (Itemized GST breakdown)
+  // 2. Line Items Detail Sheet
   const itemRows: any[] = [];
   invoices.forEach((inv) => {
-    const validItems = (inv.items || []).filter(
-      (item) => (item.description && item.description.trim() !== "" && item.description.trim() !== "-") || Number(item.amount) > 0
-    );
-
-    validItems.forEach((item, itemIdx) => {
+    (inv.items || []).forEach((item, itemIdx) => {
       itemRows.push({
         "Invoice No": inv.invoiceInfo?.invoiceNo || "DRAFT",
         "Invoice Date": inv.invoiceInfo?.invoiceDate || "",
-        "Customer / Buyer": inv.buyerDetails?.customerName || "",
-        "Buyer GSTIN": inv.buyerDetails?.gstinPan || "",
+        "Customer Name": inv.buyerDetails?.customerName || "",
         "Item #": itemIdx + 1,
-        "Product Name / Description": item.description,
+        "Description": item.description,
         "Specifications": item.specifications || "",
-        "HSN / SAC Code": item.hsnSac || "-",
-        "Quantity": Number(item.qty) || 1,
+        "HSN / SAC": item.hsnSac || "",
+        "Quantity": Number(item.qty) || 0,
         "Unit": item.unit || "Nos",
         "Rate (₹)": Number(item.rate) || 0,
         "Line Amount (₹)": Number(item.amount) || 0,
-        "CGST (%)": Number(inv.taxDetails?.cgst) || 0,
-        "SGST (%)": Number(inv.taxDetails?.sgst) || 0,
-        "IGST (%)": Number(inv.taxDetails?.igst) || 0,
-        "Place of Supply": inv.invoiceInfo?.placeOfSupply || "",
       });
     });
   });
 
   const wsItems = XLSX.utils.json_to_sheet(itemRows);
   wsItems["!cols"] = [
-    { wch: 18 }, // Invoice No
-    { wch: 14 }, // Date
-    { wch: 30 }, // Customer
-    { wch: 20 }, // GSTIN
-    { wch: 8 },  // Item #
-    { wch: 36 }, // Product Description
-    { wch: 26 }, // Specs
-    { wch: 16 }, // HSN/SAC
-    { wch: 12 }, // Qty
-    { wch: 12 }, // Unit
-    { wch: 16 }, // Rate
-    { wch: 18 }, // Amount
-    { wch: 12 }, // CGST %
-    { wch: 12 }, // SGST %
-    { wch: 12 }, // IGST %
-    { wch: 18 }, // Place of Supply
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 26 },
+    { wch: 8 },
+    { wch: 30 },
+    { wch: 24 },
+    { wch: 14 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 16 },
   ];
-  XLSX.utils.book_append_sheet(wb, wsItems, "Itemized GST Breakdown");
+  XLSX.utils.book_append_sheet(wb, wsItems, "Items Breakdown");
 
   const todayStr = new Date().toISOString().split("T")[0];
   XLSX.writeFile(wb, `JSS-Invoices-Report-${todayStr}.xlsx`);

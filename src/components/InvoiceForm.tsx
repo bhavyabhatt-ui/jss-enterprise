@@ -141,18 +141,9 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
     if (isSaving) return;
     setIsSaving(true);
     try {
-      // Filter out any blank/empty item rows
-      const validItems = data.items.filter(
-        (it) =>
-          (it.description && it.description.trim() !== "" && it.description.trim() !== "-") ||
-          Number(it.amount) > 0 ||
-          Number(it.rate) > 0
-      );
-      const itemsToSave = validItems.length > 0 ? validItems : data.items;
-
       // Automatically add any new items to Master Product Catalog
       try {
-        await syncNewItemsToCatalog(itemsToSave);
+        await syncNewItemsToCatalog(data.items);
       } catch (catErr) {
         console.warn("Could not sync items to catalog:", catErr);
       }
@@ -162,7 +153,6 @@ export default function InvoiceForm({ initialData, mode }: InvoiceFormProps) {
         createdAt: initialData?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         ...data,
-        items: itemsToSave,
       };
       await saveInvoice(invoice);
       router.replace(`/invoice/${invoice.id}`);
