@@ -1,5 +1,6 @@
 import { Invoice, DEFAULT_COMPANY_HEADER } from "@/types/invoice";
 import { HEADER_IMAGE_BASE64 } from "@/lib/assets";
+import { JSS_LOGO_BASE64 } from "@/lib/logo-base64";
 
 /**
  * Capture DOM element as PNG data URL using html-to-image
@@ -16,13 +17,28 @@ async function captureElementToPng(elementId: string): Promise<string> {
   // Pre-decode all images within the element so canvas never captures an unrendered image
   const imgs = Array.from(element.querySelectorAll("img"));
   await Promise.all(
-    imgs.map((img) => {
-      if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
-      return (img as HTMLImageElement).decode
-        ? (img as HTMLImageElement).decode().catch(() => {})
-        : Promise.resolve();
+    imgs.map(async (img) => {
+      if (img.complete && img.naturalHeight !== 0) return;
+      try {
+        if (img.decode) {
+          await img.decode();
+        }
+      } catch {}
     })
   );
+
+  // Quick 60ms tick for browser compositor layout stabilization
+  await new Promise((r) => setTimeout(r, 60));
+
+  // Warmup pass to ensure foreignObject fonts & styles are initialized in WebKit / Safari
+  try {
+    await toPng(element, {
+      quality: 0.1,
+      pixelRatio: 1,
+      backgroundColor: "#ffffff",
+      cacheBust: false,
+    });
+  } catch {}
 
   // Generate high-resolution image at fixed 800px width (pixelRatio: 2 gives 300 DPI sharpness)
   const dataUrl = await toPng(element, {
@@ -250,17 +266,40 @@ export async function exportToWord(invoice: Invoice): Promise<void> {
 
   const children: any[] = [];
 
-  // Top Dynamic Company Header Table
+  // Top Dynamic Company Header Table (Matching PDF: Logo on Left, Details in Middle, Tax Title on Right)
   const companyHeaderTable = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
     rows: [
       new TableRow({
         children: [
-          // Left: Company details
+          // Left: Company Logo Box
           new TableCell({
-            width: { size: 70, type: WidthType.PERCENTAGE },
+            width: { size: 14, type: WidthType.PERCENTAGE },
             shading: darkHeaderShading,
-            margins: { top: 120, bottom: 120, left: 140, right: 140 },
+            margins: { top: 120, bottom: 120, left: 100, right: 80 },
+            borders: tableBorder,
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new ImageRun({
+                    data: JSS_LOGO_BASE64,
+                    type: "png",
+                    transformation: {
+                      width: 58,
+                      height: 58,
+                    },
+                  }),
+                ],
+              }),
+            ],
+          }),
+          // Middle: Company details
+          new TableCell({
+            width: { size: 56, type: WidthType.PERCENTAGE },
+            shading: darkHeaderShading,
+            margins: { top: 120, bottom: 120, left: 100, right: 140 },
+            borders: tableBorder,
             children: [
               new Paragraph({
                 children: [new TextRun({ text: header.companyName, bold: true, size: 26, color: "F59E0B" })],
@@ -285,7 +324,8 @@ export async function exportToWord(invoice: Invoice): Promise<void> {
           new TableCell({
             width: { size: 30, type: WidthType.PERCENTAGE },
             shading: darkHeaderShading,
-            margins: { top: 120, bottom: 120, left: 140, right: 140 },
+            margins: { top: 120, bottom: 120, left: 120, right: 140 },
+            borders: tableBorder,
             children: [
               new Paragraph({
                 children: [new TextRun({ text: header.invoiceTitle, bold: true, size: 24, color: "F59E0B" })],

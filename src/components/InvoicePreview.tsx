@@ -49,7 +49,17 @@ export default function InvoicePreview({ invoice }: Props) {
         {/* Left: Logo & Details */}
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-14 h-14 rounded-lg bg-white/10 p-1 border border-amber-400/40 shrink-0 flex items-center justify-center">
-            <img src={JSS_LOGO_BASE64} alt="Company Logo" className="w-full h-full object-contain" crossOrigin="anonymous" />
+            <img
+              src={JSS_LOGO_BASE64}
+              alt="Company Logo"
+              width={56}
+              height={56}
+              loading="eager"
+              decoding="sync"
+              className="w-full h-full object-contain"
+              style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+              crossOrigin="anonymous"
+            />
           </div>
           <div className="min-w-0">
             <h2 className="font-extrabold text-[#f59e0b] text-base tracking-wide uppercase leading-tight truncate">

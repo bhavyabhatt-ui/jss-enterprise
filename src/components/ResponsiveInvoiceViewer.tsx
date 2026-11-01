@@ -99,7 +99,7 @@ export default function ResponsiveInvoiceViewer({ invoice }: Props) {
       <div
         className={
           isMobileScreen && activeTab === "mobile"
-            ? "fixed top-0 left-0 w-[800px] pointer-events-none opacity-0 -z-50 overflow-hidden"
+            ? "fixed top-0 left-0 w-[800px] pointer-events-none -z-50 select-none overflow-hidden"
             : "w-full flex flex-col items-center"
         }
       >
